@@ -69,50 +69,69 @@
     </div>
     <script>
         const backendUrl = "https://your-backend-url"; // Replace with your backend URL
-        const telegramUserId = "exampleUserId"; // Replace with Telegram's user ID when integrated
+        const telegramUserId = "123456789"; // Replace with the Telegram ID for the current user
 
         // Fetch stars
         async function fetchStars() {
-            const response = await fetch(`${backendUrl}/game/stars`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ telegram_id: telegramUserId }),
-            });
-            const result = await response.json();
-            document.getElementById('stars').innerText = `Stars: ${result.stars || 0}`;
+            console.log("Fetching stars...");
+            try {
+                const response = await fetch(`${backendUrl}/game/stars`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_id: telegramUserId }),
+                });
+                const result = await response.json();
+                console.log("Stars response:", result);
+                document.getElementById('stars').innerText = `Stars: ${result.stars || 0}`;
+            } catch (error) {
+                console.error("Error fetching stars:", error);
+            }
         }
 
         // Deduct star and start the game
         async function payAndStartGame() {
-            const response = await fetch(`${backendUrl}/game/deduct-star`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ telegram_id: telegramUserId }),
-            });
-            const result = await response.json();
-            if (result.success) {
-                document.getElementById('play-button').disabled = true;
-                startGame(); // Call your existing game start function
-            } else {
-                alert(result.message || 'Not enough stars to play.');
+            console.log("Attempting to deduct a star and start the game...");
+            try {
+                const response = await fetch(`${backendUrl}/game/deduct-star`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_id: telegramUserId }),
+                });
+                const result = await response.json();
+                console.log("Deduct star response:", result);
+                if (result.success) {
+                    document.getElementById('play-button').disabled = true;
+                    startGame(); // Call your existing game start function
+                } else {
+                    alert(result.message || 'Not enough stars to play.');
+                }
+            } catch (error) {
+                console.error("Error deducting star:", error);
             }
         }
 
         // Fetch leaderboard and countdown
         async function fetchLeaderboard() {
-            const response = await fetch(`${backendUrl}/leaderboard`);
-            const result = await response.json();
-            if (result.success) {
-                const leaderboardHTML = result.leaderboard.map((entry, index) => 
-                    `<p>#${index + 1}: ${entry.username} - ${entry.total_score} points</p>`
-                ).join('');
-                document.getElementById('leaderboard').innerHTML = `<h3>Leaderboard</h3>${leaderboardHTML}`;
-                document.getElementById('countdown').innerText = `Next rewards in: ${result.time_remaining} minutes`;
+            console.log("Fetching leaderboard...");
+            try {
+                const response = await fetch(`${backendUrl}/leaderboard`);
+                const result = await response.json();
+                console.log("Leaderboard response:", result);
+                if (result.success) {
+                    const leaderboardHTML = result.leaderboard.map((entry, index) => 
+                        `<p>#${index + 1}: ${entry.username} - ${entry.total_score} points</p>`
+                    ).join('');
+                    document.getElementById('leaderboard').innerHTML = `<h3>Leaderboard</h3>${leaderboardHTML}`;
+                    document.getElementById('countdown').innerText = `Next rewards in: ${result.time_remaining} minutes`;
+                }
+            } catch (error) {
+                console.error("Error fetching leaderboard:", error);
             }
         }
 
         // Load data on startup
         window.onload = async function () {
+            console.log("Loading game...");
             await fetchStars();
             await fetchLeaderboard();
         };
