@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game</title>
+    <title>HourSnake Game</title>
     <style>
         body {
             display: flex;
@@ -15,20 +15,24 @@
             margin: 0;
             padding: 20px;
         }
+
         #game-container {
             position: relative;
             width: 400px;
             height: 400px;
             margin: 20px;
         }
+
         #game-canvas {
             border: 2px solid #4CAF50;
             background: #000;
         }
-        #stars, #countdown, #current-leaderboard {
-            margin-bottom: 15px;
+
+        #stars, #leaderboard, #countdown {
+            margin: 10px 0;
             text-align: center;
         }
+
         button {
             background: #4CAF50;
             border: none;
@@ -38,10 +42,12 @@
             cursor: pointer;
             margin: 5px;
         }
+
         button:disabled {
             background: #666;
             cursor: not-allowed;
         }
+
         button:hover {
             background: #45a049;
         }
@@ -50,22 +56,24 @@
 <body>
     <h1>Snake Game</h1>
     <div id="stars">Stars: Loading...</div>
-    <div id="current-leaderboard"></div>
-    <button id="play-button" onclick="startGame()">Play for 1 Star</button>
+    <button id="play-button" onclick="payAndStartGame()">Play for 1 Star</button>
     <div id="countdown">Next rewards in: Loading...</div>
+    <div id="leaderboard">Leaderboard: Loading...</div>
     <div id="game-container">
         <canvas id="game-canvas" width="400" height="400"></canvas>
-        <div class="game-over" id="game-over">
+        <div id="game-over">
             <h2>Game Over!</h2>
             <p>Your score: <span id="final-score">0</span></p>
             <button onclick="restartGame()">Play Again</button>
         </div>
     </div>
     <script>
-        const telegramUserId = "exampleUserId"; // Replace with actual Telegram User ID
+        const backendUrl = "https://your-backend-url"; // Replace with your backend URL
+        const telegramUserId = "exampleUserId"; // Replace with Telegram's user ID when integrated
 
-        async function fetchStarCount() {
-            const response = await fetch('https://your-backend-url/game/stars', {
+        // Fetch stars
+        async function fetchStars() {
+            const response = await fetch(`${backendUrl}/game/stars`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ telegram_id: telegramUserId }),
@@ -74,8 +82,9 @@
             document.getElementById('stars').innerText = `Stars: ${result.stars || 0}`;
         }
 
-        async function startGame() {
-            const response = await fetch('https://your-backend-url/game/deduct-star', {
+        // Deduct star and start the game
+        async function payAndStartGame() {
+            const response = await fetch(`${backendUrl}/game/deduct-star`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ telegram_id: telegramUserId }),
@@ -83,28 +92,28 @@
             const result = await response.json();
             if (result.success) {
                 document.getElementById('play-button').disabled = true;
-                initGame(); // Your game start logic
+                startGame(); // Call your existing game start function
             } else {
                 alert(result.message || 'Not enough stars to play.');
             }
         }
 
+        // Fetch leaderboard and countdown
         async function fetchLeaderboard() {
-            const response = await fetch('https://your-backend-url/leaderboard');
+            const response = await fetch(`${backendUrl}/leaderboard`);
             const result = await response.json();
-
             if (result.success) {
-                const leaderboard = result.leaderboard.map(
-                    (entry, index) =>
-                        `<p>#${index + 1}: ${entry.username} - ${entry.total_score} points</p>`
+                const leaderboardHTML = result.leaderboard.map((entry, index) => 
+                    `<p>#${index + 1}: ${entry.username} - ${entry.total_score} points</p>`
                 ).join('');
-                document.getElementById('current-leaderboard').innerHTML = `<h3>Leaderboard</h3>${leaderboard}`;
+                document.getElementById('leaderboard').innerHTML = `<h3>Leaderboard</h3>${leaderboardHTML}`;
                 document.getElementById('countdown').innerText = `Next rewards in: ${result.time_remaining} minutes`;
             }
         }
 
+        // Load data on startup
         window.onload = async function () {
-            await fetchStarCount();
+            await fetchStars();
             await fetchLeaderboard();
         };
     </script>
