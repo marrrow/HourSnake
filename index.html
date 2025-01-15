@@ -1,87 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HourSnake Game</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background: #1a1a1a;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HourSnake Game</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #1a1a1a;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
 
-        #game-container {
-            position: relative;
-            width: 400px;
-            height: 400px;
-            margin: 20px;
-        }
+    #game-container {
+      position: relative;
+      width: 400px;
+      height: 400px;
+      margin: 20px;
+    }
 
-        #game-canvas {
-            border: 2px solid #4CAF50;
-            background: #000;
-        }
+    #game-canvas {
+      border: 2px solid #4CAF50;
+      background: #000;
+    }
 
-        #stars, #leaderboard, #countdown {
-            margin: 10px 0;
-            text-align: center;
-        }
+    #stars, #leaderboard, #countdown {
+      margin: 10px 0;
+      text-align: center;
+    }
 
-        button {
-            background: #4CAF50;
-            border: none;
-            padding: 10px 20px;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-        }
+    button {
+      background: #4CAF50;
+      border: none;
+      padding: 10px 20px;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 5px;
+    }
 
-        button:disabled {
-            background: #666;
-            cursor: not-allowed;
-        }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
 
-        button:hover {
-            background: #45a049;
-        }
-    </style>
+    button:hover {
+      background: #45a049;
+    }
+  </style>
 </head>
 <body>
-    <h1>Snake Game</h1>
-    <div id="stars">Stars: Loading...</div>
-    <button id="play-button" onclick="payAndStartGame()">Play for 1 Star</button>
-    <div id="countdown">Next rewards in: Loading...</div>
-    <div id="leaderboard">Leaderboard: Loading...</div>
-    <div id="game-container">
-        <canvas id="game-canvas" width="400" height="400"></canvas>
-        <div id="game-over">
-            <h2>Game Over!</h2>
-            <p>Your score: <span id="final-score">0</span></p>
-            <button onclick="restartGame()">Play Again</button>
-        </div>
+  <h1>Snake Game</h1>
+  <div id="stars">Stars: Loading...</div>
+  <button id="play-button" onclick="payAndStartGame()">Play for 1 Star</button>
+  <div id="countdown">Next rewards in: Loading...</div>
+  <div id="leaderboard">Leaderboard: Loading...</div>
+  <div id="game-container">
+    <canvas id="game-canvas" width="400" height="400"></canvas>
+    <div id="game-over">
+      <h2>Game Over!</h2>
+      <p>Your score: <span id="final-score">0</span></p>
+      <button onclick="restartGame()">Play Again</button>
     </div>
-    <script>
-    const backendUrl = "https://your-backend-url"; // Replace this with your actual backend URL
-    const telegramUserId = "123456789"; // Replace with a valid Telegram user ID for testing
+  </div>
+  <script>
+    // Replace with the Render backend URL
+    const backendUrl = "https://hoursnakebackend.onrender.com";
+    const telegramUserId = "123456789"; // Use a valid Telegram user ID for testing
 
     // Function to log messages on the screen (for debugging)
     function logToScreen(message) {
-        const logDiv = document.createElement('div');
-        logDiv.style.color = 'red';
-        logDiv.style.fontSize = '12px';
-        logDiv.style.marginTop = '5px';
-        logDiv.textContent = typeof message === "object" ? JSON.stringify(message) : message;
-        document.body.appendChild(logDiv);
+      const logDiv = document.createElement('div');
+      logDiv.style.color = 'red';
+      logDiv.style.fontSize = '12px';
+      logDiv.style.marginTop = '5px';
+      logDiv.textContent =
+        typeof message === "object" ? JSON.stringify(message) : message;
+      document.body.appendChild(logDiv);
     }
 
-    // Replace console.log and console.error with logToScreen
+    // Replace console.log and console.error with logToScreen for Telegram debugging
     console.log = logToScreen;
     console.error = logToScreen;
 
@@ -89,84 +91,82 @@
 
     // Fetch stars
     async function fetchStars() {
-        console.log("Fetching stars...");
-        try {
-            const response = await fetch(`${backendUrl}/game/stars`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ telegram_id: telegramUserId }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            console.log("Stars response:", result);
-            document.getElementById('stars').innerText = `Stars: ${result.stars || 0}`;
-        } catch (error) {
-            console.error("Error fetching stars:", error);
-            document.getElementById('stars').innerText = `Error: Could not load stars`;
+      console.log("Fetching stars...");
+      try {
+        const response = await fetch(`${backendUrl}/game/stars`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_id: telegramUserId }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
+        const result = await response.json();
+        console.log("Stars response:", result);
+        document.getElementById("stars").innerText = `Stars: ${result.stars || 0}`;
+      } catch (error) {
+        console.error("Error fetching stars:", error);
+        document.getElementById("stars").innerText = `Error: Could not load stars`;
+      }
     }
 
     // Deduct star and start the game
     async function payAndStartGame() {
-        console.log("Attempting to deduct a star and start the game...");
-        try {
-            const response = await fetch(`${backendUrl}/game/deduct-star`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ telegram_id: telegramUserId }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            console.log("Deduct star response:", result);
-            if (result.success) {
-                document.getElementById('play-button').disabled = true;
-                startGame(); // Replace with your actual game initialization function
-            } else {
-                alert(result.message || 'Not enough stars to play.');
-            }
-        } catch (error) {
-            console.error("Error deducting star:", error);
+      console.log("Attempting to deduct a star and start the game...");
+      try {
+        const response = await fetch(`${backendUrl}/game/deduct-star`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_id: telegramUserId }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
+        const result = await response.json();
+        console.log("Deduct star response:", result);
+        if (result.success) {
+          document.getElementById("play-button").disabled = true;
+          // Call your actual game start function here. For now, we simply log it.
+          console.log("Game starting...");
+        } else {
+          alert(result.message || "Not enough stars to play.");
+        }
+      } catch (error) {
+        console.error("Error deducting star:", error);
+      }
     }
 
     // Fetch leaderboard and countdown
     async function fetchLeaderboard() {
-        console.log("Fetching leaderboard...");
-        try {
-            const response = await fetch(`${backendUrl}/leaderboard`);
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            console.log("Leaderboard response:", result);
-            if (result.success) {
-                const leaderboardHTML = result.leaderboard.map((entry, index) => 
-                    `<p>#${index + 1}: ${entry.username} - ${entry.total_score} points</p>`
-                ).join('');
-                document.getElementById('leaderboard').innerHTML = `<h3>Leaderboard</h3>${leaderboardHTML}`;
-                document.getElementById('countdown').innerText = `Next rewards in: ${result.time_remaining} minutes`;
-            }
-        } catch (error) {
-            console.error("Error fetching leaderboard:", error);
+      console.log("Fetching leaderboard...");
+      try {
+        const response = await fetch(`${backendUrl}/leaderboard`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
+        const result = await response.json();
+        console.log("Leaderboard response:", result);
+        if (result.success) {
+          const leaderboardHTML = result.leaderboard
+            .map(
+              (entry, index) =>
+                `<p>#${index + 1}: ${entry.username} - ${entry.total_score} points</p>`
+            )
+            .join("");
+          document.getElementById("leaderboard").innerHTML = `<h3>Leaderboard</h3>${leaderboardHTML}`;
+          document.getElementById("countdown").innerText = `Next rewards in: ${result.time_remaining} minutes`;
+        }
+      } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+      }
     }
 
     // Initial load
     window.onload = async function () {
-        console.log("Loading game...");
-        await fetchStars();
-        await fetchLeaderboard();
+      console.log("Loading game...");
+      await fetchStars();
+      await fetchLeaderboard();
     };
-</script>
+  </script>
 </body>
 </html>
