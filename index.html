@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HourSnake Game</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #1a1a1a;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    #game-container {
+      position: relative;
+      width: 400px;
+      height: 400px;
+      margin: 20px;
+    }
+
+    #game-canvas {
+      border: 2px solid #4CAF50;
+      background: #000;
+    }
+
+    #stars, #leaderboard, #countdown {
+      margin: 10px 0;
+      text-align: center;
+    }
+
+    button {
+      background: #4CAF50;
+      border: none;
+      padding: 10px 20px;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 5px;
+    }
+
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    #game-over {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Snake Game</h1>
+  <div id="stars">Stars: Loading...</div>
+  <button id="play-button" onclick="payAndStartGame()">Play for 1 Star</button>
+  <div id="countdown">Next rewards in: Loading...</div>
+  <div id="leaderboard">Leaderboard: Loading...</div>
+  <div id="game-container">
+    <canvas id="game-canvas" width="400" height="400"></canvas>
+    <div id="game-over">
+      <h2>Game Over!</h2>
+      <p>Your score: <span id="final-score">0</span></p>
+      <button onclick="restartGame()">Play Again</button>
+    </div>
+  </div>
+  <script>
+    const backendUrl = "https://hoursnakebackend.onrender.com";
+    const telegramUserId = "123456789"; // Replace with actual user ID for testing
+
+    // Fetch stars
+    async function fetchStars() {
+      try {
+        const response = await fetch(`${backendUrl}/game/stars`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_id: telegramUserId }),
+        });
+        const data = await response.json();
+        document.getElementById("stars").innerText = `Stars: ${data.stars || 0}`;
+      } catch (error) {
+        console.error("Error fetching stars:", error);
+      }
+    }
+
+    // Deduct star and start the game
+    async function payAndStartGame() {
+      try {
+        const response = await fetch(`${backendUrl}/game/deduct-star`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_id: telegramUserId }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          document.getElementById("play-button").disabled = true;
+          startGame(); // Start Snake Game
+        } else {
+          alert(data.message);
+        }
+      } catch (error) {
+        console.error("Error deducting star:", error);
+      }
+    }
+
+    // Fetch leaderboard
+    async function fetchLeaderboard() {
+      try {
+        const response = await fetch(`${backendUrl}/leaderboard`);
+        const data = await response.json();
+        const leaderboardHTML = data.leaderboard
+          .map((entry, index) => `<p>${index + 1}. ${entry.username || "Anonymous"} - ${entry.total_score}</p>`)
+          .join("");
+        document.getElementById("leaderboard").innerHTML = leaderboardHTML;
+      } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+      }
+    }
+
+    // Snake Game Logic
+    function startGame() {
+      const canvas = document.getElementById("game-canvas");
+      const ctx = canvas.getContext("2d");
+      let snake = [{ x: 10, y: 10 }];
+      let food = { x: 15, y: 15 };
+      let dx = 1, dy = 0;
+      let score = 0;
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw snake
+        snake.forEach(segment => {
+          ctx.fillStyle = "lime";
+          ctx.fillRect(segment.x * 20, segment.y * 20, 20, 20);
+        });
+        // Draw food
+        ctx.fillStyle = "red";
+        ctx.fillRect(food.x * 20, food.y * 20, 20, 20);
+      }
+
+      function update() {
+        const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+        if (head.x === food.x && head.y === food.y) {
+          score++;
+          food = { x: Math.floor(Math.random() * 20), y: Math.floor(Math.random() * 20) };
+        } else {
+          snake.pop();
+        }
+        snake.unshift(head);
+
+        // Check collisions
+        if (
+          head.x < 0 || head.y < 0 || head.x >= 20 || head.y >= 20 ||
+          snake.slice(1).some(segment => segment.x === head.x && segment.y === head.y)
+        ) {
+          endGame(score);
+        }
+      }
+
+      function endGame(finalScore) {
+        clearInterval(gameInterval);
+        document.getElementById("final-score").innerText = finalScore;
+        document.getElementById("game-over").style.display = "block";
+      }
+
+      function restartGame() {
+        snake = [{ x: 10, y: 10 }];
+        food = { x: 15, y: 15 };
+        dx = 1;
+        dy = 0;
+        score = 0;
+        document.getElementById("game-over").style.display = "none";
+        gameInterval = setInterval(() => {
+          update();
+          draw();
+        }, 200);
+      }
+
+      document.addEventListener("keydown", event => {
+        if (event.key === "ArrowUp" && dy === 0) { dx = 0; dy = -1; }
+        if (event.key === "ArrowDown" && dy === 0) { dx = 0; dy = 1; }
+        if (event.key === "ArrowLeft" && dx === 0) { dx = -1; dy = 0; }
+        if (event.key === "ArrowRight" && dx === 0) { dx = 1; dy = 0; }
+      });
+
+      let gameInterval = setInterval(() => {
+        update();
+        draw();
+      }, 200);
+    }
+
+    // Initialize the page
+    window.onload = () => {
+      fetchStars();
+      fetchLeaderboard();
+    };
+  </script>
+</body>
+</html>
