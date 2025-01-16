@@ -80,8 +80,12 @@
     </div>
   </div>
   <script>
-    const backendUrl = "https://hoursnakebackend.onrender.com";
-    const telegramUserId = "123456789"; // Replace with actual user ID for testing
+    const backendUrl = "https://hoursnake.onrender.com";
+    const telegramUserId = Telegram.WebApp.initDataUnsafe?.user?.id; // Dynamic Telegram user ID
+
+    if (!telegramUserId) {
+      alert("Telegram user ID is missing. Ensure you're running this app through Telegram.");
+    }
 
     // Fetch stars
     async function fetchStars() {
@@ -95,6 +99,7 @@
         document.getElementById("stars").innerText = `Stars: ${data.stars || 0}`;
       } catch (error) {
         console.error("Error fetching stars:", error);
+        document.getElementById("stars").innerText = "Stars: Error";
       }
     }
 
@@ -111,7 +116,7 @@
           document.getElementById("play-button").disabled = true;
           startGame(); // Start Snake Game
         } else {
-          alert(data.message);
+          alert(data.message || "Failed to deduct star.");
         }
       } catch (error) {
         console.error("Error deducting star:", error);
@@ -121,14 +126,19 @@
     // Fetch leaderboard
     async function fetchLeaderboard() {
       try {
-        const response = await fetch(`${backendUrl}/leaderboard`);
+        const response = await fetch(`${backendUrl}/game/leaderboard`);
         const data = await response.json();
-        const leaderboardHTML = data.leaderboard
-          .map((entry, index) => `<p>${index + 1}. ${entry.username || "Anonymous"} - ${entry.total_score}</p>`)
-          .join("");
-        document.getElementById("leaderboard").innerHTML = leaderboardHTML;
+        if (data.success) {
+          const leaderboardHTML = data.leaderboard
+            .map((entry, index) => `<p>${index + 1}. ${entry.username || "Anonymous"} - ${entry.total_score}</p>`)
+            .join("");
+          document.getElementById("leaderboard").innerHTML = leaderboardHTML;
+        } else {
+          document.getElementById("leaderboard").innerHTML = "Error loading leaderboard.";
+        }
       } catch (error) {
         console.error("Error fetching leaderboard:", error);
+        document.getElementById("leaderboard").innerHTML = "Leaderboard: Error";
       }
     }
 
@@ -143,12 +153,10 @@
 
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Draw snake
         snake.forEach(segment => {
           ctx.fillStyle = "lime";
           ctx.fillRect(segment.x * 20, segment.y * 20, 20, 20);
         });
-        // Draw food
         ctx.fillStyle = "red";
         ctx.fillRect(food.x * 20, food.y * 20, 20, 20);
       }
@@ -163,7 +171,6 @@
         }
         snake.unshift(head);
 
-        // Check collisions
         if (
           head.x < 0 || head.y < 0 || head.x >= 20 || head.y >= 20 ||
           snake.slice(1).some(segment => segment.x === head.x && segment.y === head.y)
@@ -204,7 +211,6 @@
       }, 200);
     }
 
-    // Initialize the page
     window.onload = () => {
       fetchStars();
       fetchLeaderboard();
