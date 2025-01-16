@@ -1,21 +1,19 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { Pool } = require('pg');
 
-// Set up the Telegram bot in Webhook mode
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, {
-  webHook: true,
-});
+// Bot initialization using webhook
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { webHook: true });
 
-// Set the Webhook URL for your bot
-const webhookUrl = `${process.env.FRONTEND_URL}/bot${process.env.TELEGRAM_TOKEN}`;
+// Set webhook URL
+const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_TOKEN}`;
 bot.setWebHook(webhookUrl);
 
-// PostgreSQL Database connection
+// Database connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false,
-  },
+    rejectUnauthorized: false
+  }
 });
 
 // Start command
@@ -26,14 +24,14 @@ bot.onText(/\/start/, async (msg) => {
     inline_keyboard: [
       [{ text: '🎮 Play Snake', web_app: { url: process.env.FRONTEND_URL } }],
       [{ text: '⭐ Check Stars', callback_data: 'check_stars' }],
-      [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }],
-    ],
+      [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }]
+    ]
   };
 
   try {
     // Add new user if they don't exist
     await pool.query(
-      'INSERT INTO users (telegram_id, username, stars) VALUES ($1, $2, 5) ON CONFLICT (telegram_id) DO NOTHING',
+      'INSERT INTO users (telegram_id, username, stars) VALUES ($1, $2, 1) ON CONFLICT (telegram_id) DO NOTHING',
       [msg.from.id, msg.from.username]
     );
 
@@ -60,7 +58,10 @@ bot.on('callback_query', async (query) => {
   switch (query.data) {
     case 'check_stars':
       try {
-        const result = await pool.query('SELECT stars FROM users WHERE telegram_id = $1', [query.from.id]);
+        const result = await pool.query(
+          'SELECT stars FROM users WHERE telegram_id = $1',
+          [query.from.id]
+        );
         const stars = result.rows[0]?.stars || 0;
         bot.sendMessage(chatId, `You have ${stars} ⭐`);
       } catch (error) {
@@ -84,7 +85,7 @@ bot.on('callback_query', async (query) => {
 
         let message = '🏆 Current Hour Leaders:\n\n';
         result.rows.forEach((row, i) => {
-          message += `${i + 1}. ${row.username}: ${row.score}\n`;
+          message += `${i + 1}. ${row.username || 'Anonymous'}: ${row.score}\n`;
         });
 
         bot.sendMessage(chatId, message);
