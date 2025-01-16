@@ -1,16 +1,16 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { Pool } = require('pg');
 
-// Bot initialization using webhook
+// Initialize Telegram Bot with webhook
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { webHook: true });
 
-// Set webhook URL
+// Set webhook using WEBHOOK_URL from .env
 const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_TOKEN}`;
 bot.setWebHook(webhookUrl)
-  .then(() => console.log(`Webhook set: ${webhookUrl}`))
-  .catch((err) => console.error('Error setting webhook:', err));
+  .then(() => console.log(`Webhook successfully set: ${webhookUrl}`))
+  .catch((err) => console.error('Error setting webhook:', err.message, err.response?.body || 'No response body'));
 
-// Database connection
+// Connect to PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -18,10 +18,11 @@ const pool = new Pool({
   },
 });
 
-// Start command
+// Handle /start command
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
 
+  // Inline keyboard for bot options
   const keyboard = {
     inline_keyboard: [
       [{ text: '🎮 Play Snake', web_app: { url: process.env.FRONTEND_URL } }],
@@ -31,7 +32,7 @@ bot.onText(/\/start/, async (msg) => {
   };
 
   try {
-    // Add new user if they don't exist
+    // Add new user to database if they don't already exist
     await pool.query(
       'INSERT INTO users (telegram_id, username, stars) VALUES ($1, $2, 1) ON CONFLICT (telegram_id) DO NOTHING',
       [msg.from.id, msg.from.username || 'Anonymous']
@@ -53,12 +54,12 @@ bot.onText(/\/start/, async (msg) => {
   }
 });
 
-// Handle button clicks
+// Handle callback queries
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
 
   switch (query.data) {
-    case 'check_stars':
+    case 'check_stars': {
       try {
         const result = await pool.query(
           'SELECT stars FROM users WHERE telegram_id = $1',
@@ -71,10 +72,10 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, 'Error checking stars. Please try again.');
       }
       break;
-
-    case 'leaderboard':
+    }
+    case 'leaderboard': {
       try {
-        const hourStart = Math.floor(Date.now() / (1000 * 60 * 60));
+        const hourStart = Math.floor(Date.now() / (1000 * 60 * 60)); // Current hour
         const result = await pool.query(
           `SELECT username, score 
            FROM scores s
@@ -96,10 +97,11 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, 'Error fetching leaderboard. Please try again.');
       }
       break;
-
-    default:
+    }
+    default: {
       bot.sendMessage(chatId, 'Invalid option.');
       break;
+    }
   }
 });
 
