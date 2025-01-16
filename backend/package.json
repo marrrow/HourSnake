@@ -1,0 +1,39 @@
+{
+  "name": "hoursnake",
+  "version": "1.0.0",
+  "description": "A Telegram bot snake game with hourly rewards",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "migrate": "node db/migrate.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-telegram-bot-api": "^0.61.0",
+    "pg": "^8.13.1",
+    "pg-pool": "^3.7.0",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marrrow/HourSnake.git"
+  },
+  "keywords": [
+    "snake",
+    "telegram",
+    "game"
+  ],
+  "author": "",
+  "license": "ISC"
+}

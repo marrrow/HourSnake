@@ -1,0 +1,3 @@
+node_modules/
+.hour_snake.db
+.env
