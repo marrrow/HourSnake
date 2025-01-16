@@ -6,14 +6,16 @@ const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { webHook: true });
 
 // Set webhook URL
 const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_TOKEN}`;
-bot.setWebHook(webhookUrl);
+bot.setWebHook(webhookUrl)
+  .then(() => console.log(`Webhook set: ${webhookUrl}`))
+  .catch((err) => console.error('Error setting webhook:', err));
 
 // Database connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false, // Required for managed PostgreSQL on Render
+  },
 });
 
 // Start command
@@ -24,15 +26,15 @@ bot.onText(/\/start/, async (msg) => {
     inline_keyboard: [
       [{ text: '🎮 Play Snake', web_app: { url: process.env.FRONTEND_URL } }],
       [{ text: '⭐ Check Stars', callback_data: 'check_stars' }],
-      [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }]
-    ]
+      [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }],
+    ],
   };
 
   try {
     // Add new user if they don't exist
     await pool.query(
       'INSERT INTO users (telegram_id, username, stars) VALUES ($1, $2, 1) ON CONFLICT (telegram_id) DO NOTHING',
-      [msg.from.id, msg.from.username]
+      [msg.from.id, msg.from.username || 'Anonymous']
     );
 
     bot.sendMessage(
@@ -46,7 +48,7 @@ bot.onText(/\/start/, async (msg) => {
       { reply_markup: keyboard }
     );
   } catch (error) {
-    console.error('Error in start command:', error);
+    console.error('Error in /start command:', error);
     bot.sendMessage(chatId, 'Sorry, there was an error. Please try again.');
   }
 });
@@ -93,6 +95,10 @@ bot.on('callback_query', async (query) => {
         console.error('Error fetching leaderboard:', error);
         bot.sendMessage(chatId, 'Error fetching leaderboard. Please try again.');
       }
+      break;
+
+    default:
+      bot.sendMessage(chatId, 'Invalid option.');
       break;
   }
 });
