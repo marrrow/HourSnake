@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HourSnake Game</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
       display: flex;
@@ -81,14 +82,35 @@
   </div>
   <script>
     const backendUrl = "https://hoursnake.onrender.com";
-    const telegramUserId = Telegram.WebApp.initDataUnsafe?.user?.id; // Dynamic Telegram user ID
+    let telegramUserId; // Declare variable globally
 
-    if (!telegramUserId) {
-      alert("Telegram user ID is missing. Ensure you're running this app through Telegram.");
-    }
+    // Initialize Telegram WebApp and handle errors
+    window.onload = function () {
+      try {
+        const telegram = Telegram.WebApp;
+        telegramUserId = telegram.initDataUnsafe?.user?.id;
+        if (!telegramUserId) {
+          alert("Unable to fetch Telegram User ID. Please ensure you're accessing the game from Telegram.");
+        } else {
+          console.log("Telegram User ID:", telegramUserId);
+        }
+      } catch (error) {
+        console.error("Error initializing Telegram WebApp:", error);
+        alert("Failed to initialize Telegram WebApp. Ensure you're running this through Telegram.");
+      }
+
+      // Fetch stars and leaderboard after initialization
+      fetchStars();
+      fetchLeaderboard();
+    };
 
     // Fetch stars
     async function fetchStars() {
+      if (!telegramUserId) {
+        console.error("Telegram User ID is missing.");
+        return;
+      }
+
       try {
         const response = await fetch(`${backendUrl}/game/stars`, {
           method: "POST",
@@ -105,6 +127,11 @@
 
     // Deduct star and start the game
     async function payAndStartGame() {
+      if (!telegramUserId) {
+        alert("Telegram User ID is missing. Please ensure you're accessing the game from Telegram.");
+        return;
+      }
+
       try {
         const response = await fetch(`${backendUrl}/game/deduct-star`, {
           method: "POST",
@@ -126,7 +153,7 @@
     // Fetch leaderboard
     async function fetchLeaderboard() {
       try {
-        const response = await fetch(`${backendUrl}/game/leaderboard`);
+        const response = await fetch(`${backendUrl}/leaderboard`);
         const data = await response.json();
         if (data.success) {
           const leaderboardHTML = data.leaderboard
@@ -210,11 +237,6 @@
         draw();
       }, 200);
     }
-
-    window.onload = () => {
-      fetchStars();
-      fetchLeaderboard();
-    };
   </script>
 </body>
 </html>
