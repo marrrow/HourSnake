@@ -4,7 +4,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const { Pool } = require("pg");
 const winston = require("winston");
-const bot = require('./bot');
+const bot = require("./bot");
 
 // Environment Variables
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
@@ -42,9 +42,13 @@ app.get("/", (req, res) => {
   res.send("HourSnake Backend is running...");
 });
 
-// API Endpoints
+// Add the Webhook Route
+app.post(`/bot${TELEGRAM_TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body); // Pass update to Telegram bot
+  res.sendStatus(200);
+});
 
-// Fetch Stars
+// Fetch Stars Endpoint
 app.post("/game/stars", async (req, res) => {
   try {
     const { telegram_id } = req.body;
@@ -57,7 +61,7 @@ app.post("/game/stars", async (req, res) => {
   }
 });
 
-// Deduct Star and Start Game
+// Deduct Star Endpoint
 app.post("/game/deduct-star", async (req, res) => {
   try {
     const { telegram_id } = req.body;
