@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { logError } = require('../utils/errorHandler');
 
-// Fetch leaderboard (top 10 players)
+// Fetch top 10 players for the leaderboard
 router.get('/', async (req, res) => {
     try {
         const result = await db.query(
@@ -13,10 +13,13 @@ router.get('/', async (req, res) => {
              LIMIT 10`
         );
 
-        res.json({
-            success: true,
-            leaderboard: result.rows
-        });
+        const leaderboard = result.rows.map((player, index) => ({
+            rank: index + 1,
+            username: player.username || "Anonymous",
+            total_score: player.total_score || 0,
+        }));
+
+        res.json({ success: true, leaderboard });
     } catch (err) {
         logError(err, 'Error fetching leaderboard');
         res.status(500).json({ success: false, error: 'Failed to fetch leaderboard' });
