@@ -1,55 +1,36 @@
 // migrate.js
-require("dotenv").config();
+require("dotenv").config();  // Load variables from .env
 const { Pool } = require("pg");
-const winston = require("winston");
 
-// Logger Setup
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: "migration.log" }),
-  ],
-});
-
+// We'll read DATABASE_URL from .env
+const isProduction = process.env.NODE_ENV === "production";
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
+
 
 async function migrate() {
   try {
-    logger.info("🚀 Starting database migration...");
+    console.log("🚀 Starting migration...");
 
-    // Create users table
+    // Create the 'users' table if it doesn't exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
-        telegram_id BIGINT UNIQUE NOT NULL,
-        username TEXT,
-        stars INT DEFAULT 0,
-        total_score INT DEFAULT 0
+        telegram_id BIGINT UNIQUE,
+        credits INT DEFAULT 0
       );
     `);
 
-    // Create scores table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS scores (
-        id SERIAL PRIMARY KEY,
-        user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        score INT NOT NULL,
-        hour_start BIGINT NOT NULL,
-        UNIQUE (user_id, hour_start)
-      );
-    `);
-
-    logger.info("✅ Migration completed successfully!");
-    process.exit(0);
-  } catch (error) {
-    logger.error("❌ Migration failed:", error);
-    process.exit(1);
+    console.log("✅ Migration completed successfully!");
+  } catch (err) {
+    console.error("❌ Migration failed:", err);
+  } finally {
+    // Close the DB connection
+    pool.end();
   }
 }
 
+// Run the migration
 migrate();

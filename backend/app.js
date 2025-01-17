@@ -5,18 +5,17 @@ const bodyParser = require("body-parser");
 const { Pool } = require("pg");
 const TelegramBot = require("node-telegram-bot-api");
 
-// Initialize your bot with token
+// 1) Initialize your bot with token
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(TELEGRAM_TOKEN, { webHook: true });
 
-// If you want to set a webhook with Bot API:
+// 2) Set up webhook
 const webhookUrl = `${process.env.WEBHOOK_URL}/bot${TELEGRAM_TOKEN}`;
 bot.setWebHook(webhookUrl)
   .then(() => console.log(`Webhook set: ${webhookUrl}`))
   .catch(err => console.error("Error setting webhook:", err));
 
-// Optional: You can keep a DB for storing final scores
-// If you do, you can use Pool below. Or remove it if unneeded.
+// 3) Set up DB pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -27,72 +26,137 @@ pool.connect().then(() => {
   console.error("❌ Database connection error:", err);
 });
 
-// Express setup
+// 4) Express server setup
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Bot updates
+// 5) Route for Telegram bot updates
 app.post(`/bot${TELEGRAM_TOKEN}`, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-// ---------------------------------------------------------------------
-// Create /create-invoice route for official Telegram Stars
-// ---------------------------------------------------------------------
-app.post("/create-invoice", async (req, res) => {
+/* ---------------------------------------------------------------------------
+   LOCAL "CREDITS" APPROACH
+   We'll store user credits in DB -> 'users' table with columns:
+     id SERIAL PRIMARY KEY,
+     telegram_id BIGINT UNIQUE,
+     credits INT DEFAULT 0
+   Then we can get credits, deduct credits, top up credits, etc.
+--------------------------------------------------------------------------- */
+
+// 5A) Create or ensure 'users' table exists (optional check). You might do this
+// with a migration script or your own method. For example:
+//   CREATE TABLE IF NOT EXISTS users (
+//     id SERIAL PRIMARY KEY,
+//     telegram_id BIGINT UNIQUE,
+//     credits INT DEFAULT 0
+//   );
+// We'll assume you've handled that separately in a migration.
+
+// 5B) Fetch the user's current credit balance
+app.post("/game/get-credits", async (req, res) => {
   try {
-    // 1 star game entry
-    const title = "Snake Game Entry";
-    const description = "Pay 1 Star to play!";
-    const payload = "{}";      // optional JSON payload
-    const providerToken = "";  // empty string => official Stars
-    const currency = "XTR";    // 'XTR' = Telegram Stars
-    const prices = [{ amount: 1, label: "Game Entry" }];
-
-    // If node-telegram-bot-api library doesn't have createInvoiceLink,
-    // call the raw /createInvoiceLink endpoint:
-    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/createInvoiceLink`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        description,
-        payload,
-        provider_token: providerToken,
-        currency,
-        prices
-      })
-    });
-    const data = await response.json();
-
-    if (!data.ok) {
-      console.error("createInvoiceLink error:", data);
-      return res.status(500).json({ error: data.description });
-    }
-
-    const invoiceLink = data.result; // The actual invoice URL
-    console.log("Invoice link created:", invoiceLink);
-    res.json({ invoiceLink });
-  } catch (error) {
-    console.error("Error creating invoice:", error);
-    res.status(500).json({ error: "Failed to create invoice" });
+    const { telegram_id } = req.body;
+    // Fetch from DB
+    const result = await pool.query(
+      "SELECT credits FROM users WHERE telegram_id = $1",
+      [telegram_id]
+    );
+    // If user row not found, credits = 0
+    const credits = result.rows[0]?.credits || 0;
+    // Return it
+    res.json({ success: true, credits });
+  } catch (err) {
+    console.error("Error fetching credits:", err);
+    res.status(500).json({ success: false, message: "Error fetching credits." });
   }
 });
 
-// ---------------------------------------------------------------------
-// (Optional) Handle scoreboard or final scores if you'd like
-// ---------------------------------------------------------------------
+// 5C) Deduct 1 credit for a game entry
+app.post("/game/deduct-credit", async (req, res) => {
+  try {
+    const { telegram_id } = req.body;
+    // Get the user's current credits
+    let result = await pool.query(
+      "SELECT credits FROM users WHERE telegram_id = $1",
+      [telegram_id]
+    );
+
+    if (result.rowCount === 0) {
+      // If user doesn't exist, create with 0 credits
+      await pool.query(
+        "INSERT INTO users (telegram_id, credits) VALUES ($1, 0)",
+        [telegram_id]
+      );
+      return res.json({
+        success: false,
+        message: "Not enough credits. Please top up first."
+      });
+    }
+
+    const currentCredits = result.rows[0].credits;
+    if (currentCredits > 0) {
+      // Deduct 1 credit
+      await pool.query(
+        "UPDATE users SET credits = credits - 1 WHERE telegram_id = $1",
+        [telegram_id]
+      );
+      return res.json({
+        success: true,
+        message: "Game started! 1 credit deducted."
+      });
+    } else {
+      return res.json({
+        success: false,
+        message: "Not enough credits. Please top up first."
+      });
+    }
+  } catch (err) {
+    console.error("Error deducting credit:", err);
+    res.status(500).json({ success: false, message: "Error deducting credit." });
+  }
+});
+
+// 5D) (OPTIONAL) Route for manually topping up credits after you receive payment
+// e.g. if user paid you in crypto externally, you can call this from an admin UI
+app.post("/admin/manual-topup", async (req, res) => {
+  try {
+    const { telegram_id, addCredits } = req.body;
+    // Ensure user row
+    let result = await pool.query(
+      "SELECT id FROM users WHERE telegram_id = $1",
+      [telegram_id]
+    );
+    if (result.rowCount === 0) {
+      // create them with zero
+      await pool.query(
+        "INSERT INTO users (telegram_id, credits) VALUES ($1, 0)",
+        [telegram_id]
+      );
+    }
+    // Now top up
+    await pool.query(
+      "UPDATE users SET credits = credits + $1 WHERE telegram_id = $2",
+      [addCredits, telegram_id]
+    );
+    return res.json({ success: true, message: "User credited successfully." });
+  } catch (err) {
+    console.error("Error topping up credits:", err);
+    res.status(500).json({ success: false, message: "Error topping up." });
+  }
+});
+
+/* ---------------------------------------------------------------------------
+   SCOREBOARD (OPTIONAL)
+   Keep if you want to record user scores or do an hourly leaderboard
+--------------------------------------------------------------------------- */
 app.post("/game/submit-score", async (req, res) => {
   try {
     const { telegram_id, score } = req.body;
-    // Save it in DB or do something else.
-    // Example pseudo:
-    // await pool.query(
-    //   'INSERT INTO scores (telegram_id, score, hour_start) ... etc'
-    // );
+    // You can store it in a "scores" table or in the "users" table
+    // This is just a placeholder
     console.log(`User ${telegram_id} finished with score: ${score}`);
     return res.json({ success: true, message: "Score recorded" });
   } catch (err) {
@@ -101,11 +165,9 @@ app.post("/game/submit-score", async (req, res) => {
   }
 });
 
-// (Optional) current-leaderboard route if you track hour-based scores
 app.get("/current-leaderboard", async (req, res) => {
   try {
     // Return an object like: { success: true, leaderboard: [ ... ] }
-    // For demonstration:
     res.json({ success: true, leaderboard: [] });
   } catch (err) {
     console.error("Error fetching leaderboard:", err);
@@ -113,7 +175,7 @@ app.get("/current-leaderboard", async (req, res) => {
   }
 });
 
-// Start the server
+// 6) Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);

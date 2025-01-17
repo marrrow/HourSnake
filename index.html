@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HourSnake - Official Stars</title>
+  <title>HourSnake - Local Credits</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
@@ -25,8 +25,7 @@
       border: 2px solid #4CAF50;
       background: #000;
     }
-    #leaderboard,
-    #countdown {
+    #credits, #leaderboard, #countdown {
       margin: 10px 0;
       text-align: center;
     }
@@ -60,12 +59,18 @@
   </style>
 </head>
 <body>
-  <h1>Snake Game (Official Stars)</h1>
+  <h1>Snake Game (Local Credits)</h1>
 
-  <!-- Button that triggers the official star payment -->
-  <button id="pay-button" onclick="payAndStartGame()">Pay 1 Star to Play</button>
+  <!-- Button to show user's current credits -->
+  <div id="credits">Credits: (Loading...)</div>
 
-  <!-- A countdown label for next hour or any other logic -->
+  <!-- Button that attempts to pay 1 credit -->
+  <button id="pay-button" onclick="payAndStartGame()">Pay 1 Credit to Play</button>
+
+  <!-- Optional: A top-up button or instructions, so they pay you externally, then you do manual-topup -->
+  <button id="topup-button" onclick="topUpInfo()">Top Up Credits</button>
+
+  <!-- A countdown label for next hour, or any logic you want -->
   <div id="countdown">Next rewards in: Loading...</div>
 
   <!-- Leaderboard if you have a scoreboard on your server -->
@@ -85,13 +90,10 @@
     const backendUrl = "https://hoursnake.onrender.com"; // your deployed server
     let telegramUserId;
 
-    // ----------------------
-    // 1) On Load: Fullscreen
-    // ----------------------
+    // On load, attempt to init Telegram
     window.onload = function() {
       try {
         const tg = Telegram.WebApp;
-        // Request full-screen mode right away
         tg.requestFullscreen();
 
         telegramUserId = tg.initDataUnsafe?.user?.id;
@@ -103,60 +105,84 @@
         alert("Failed to initialize Telegram WebApp. Are you inside Telegram?");
       }
 
-      // Periodically update countdown, leaderboard, etc
+      // Start intervals
       setInterval(updateCountdown, 1000);
       setInterval(fetchCurrentLeaderboard, 10000);
 
-      // Initial fetch
+      // Fetch credits once on load
+      fetchCredits();
       fetchCurrentLeaderboard();
     };
 
-    // ---------------------------
-    // 2) Official Star Payment
-    // ---------------------------
-    async function payAndStartGame() {
+    // 1) GET CURRENT CREDITS
+    async function fetchCredits() {
+      if (!telegramUserId) return;
       try {
-        // Make a POST to /create-invoice to generate star invoice link
-        const resp = await fetch(`${backendUrl}/create-invoice`, { method: "POST" });
-        const data = await resp.json();
-        if (!data.invoiceLink) {
-          alert("Error: could not fetch invoice link.");
-          return;
-        }
-
-        // Use Telegram's openInvoice => official Star payment drawer
-        Telegram.WebApp.openInvoice(data.invoiceLink, (status) => {
-          // "paid", "cancelled", "failed", or "pending"
-          if (status === "paid") {
-            alert("Payment successful! Starting Snake...");
-            document.getElementById("pay-button").disabled = true;
-            startGame();
-          } else {
-            alert("Payment not completed: " + status);
-          }
+        const resp = await fetch(`${backendUrl}/game/get-credits`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_id: telegramUserId })
         });
+        const data = await resp.json();
+        if (data.success) {
+          document.getElementById("credits").innerText = `Credits: ${data.credits}`;
+        } else {
+          document.getElementById("credits").innerText = "Credits: Error";
+        }
       } catch (error) {
-        console.error("Error requesting invoice or opening invoice:", error);
-        alert("Could not open invoice. Possibly no star integration?");
+        console.error("Error fetching credits:", error);
+        document.getElementById("credits").innerText = "Credits: Error";
       }
     }
 
-    // ---------------------------
-    // 3) Hourly Countdown Demo
-    // ---------------------------
+    // 2) DEDUCT 1 CREDIT, THEN START GAME
+    async function payAndStartGame() {
+      if (!telegramUserId) {
+        alert("User ID missing. Are we in Telegram?");
+        return;
+      }
+      try {
+        const resp = await fetch(`${backendUrl}/game/deduct-credit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_id: telegramUserId })
+        });
+        const data = await resp.json();
+        if (data.success) {
+          alert("1 credit deducted. Starting game...");
+          document.getElementById("pay-button").disabled = true;
+          // re-fetch credits after deduct
+          fetchCredits();
+          startGame();
+        } else {
+          alert(data.message || "Not enough credits. Please top up first.");
+        }
+      } catch (error) {
+        console.error("Error deducting credit:", error);
+        alert("Could not deduct credit. Check console.");
+      }
+    }
+
+    // 3) Optional top up instructions
+    function topUpInfo() {
+      alert("To top up credits, please contact admin or pay on the website.\n\n" +
+            "After payment, the admin calls /admin/manual-topup with your telegram ID.\n" +
+            "Then your credits are updated in the database.\n" +
+            "Check your balance again by reloading or pressing 'Pay 1 Credit to Play' button!");
+    }
+
+    // 4) Countdown (for any reason, like next hour reset)
     function updateCountdown() {
       const now = Date.now();
       const nextHour = now - (now % 3600000) + 3600000;
       const diffMs = nextHour - now;
       const m = Math.floor(diffMs / 60000);
       const s = Math.floor((diffMs % 60000) / 1000);
-      document.getElementById("countdown").innerText =
+      document.getElementById('countdown').innerText =
         `Next rewards in: ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     }
 
-    // ---------------------------
-    // 4) Leaderboard from server
-    // ---------------------------
+    // 5) Leaderboard
     async function fetchCurrentLeaderboard() {
       try {
         const resp = await fetch(`${backendUrl}/current-leaderboard`);
@@ -180,9 +206,7 @@
       }
     }
 
-    // ---------------------------
-    // 5) Snake Game Logic
-    // ---------------------------
+    // 6) SNAKE GAME
     let gameInterval;
     function startGame() {
       const canvas = document.getElementById("game-canvas");
@@ -232,9 +256,11 @@
         clearInterval(gameInterval);
         document.getElementById("final-score").innerText = finalScore;
         document.getElementById("game-over").style.display = "block";
+
+        // Re-enable the button so they can pay 1 credit again next time
         document.getElementById("pay-button").disabled = false;
 
-        // Optionally store final score if your server uses /game/submit-score
+        // Optionally submit final score
         if (telegramUserId && typeof finalScore === "number") {
           fetch(`${backendUrl}/game/submit-score`, {
             method: "POST",
@@ -253,21 +279,18 @@
       function restartGame() {
         document.getElementById("game-over").style.display = "none";
         clearInterval(gameInterval);
-        // If you want them to pay again, call payAndStartGame()
-        // Otherwise let them replay for free
         snake = [{ x: 10, y: 10 }];
         food = { x: 15, y: 15 };
-        dx = 1; dy = 0; score = 0;
+        dx = 1; dy = 0;
+        score = 0;
 
         gameInterval = setInterval(() => {
           update();
           draw();
         }, 200);
       }
-      // Expose restartGame globally
       window.restartGame = restartGame;
 
-      // Key controls
       document.addEventListener("keydown", e => {
         if (e.key === "ArrowUp"   && dy === 0) { dx = 0; dy = -1; }
         if (e.key === "ArrowDown" && dy === 0) { dx = 0; dy = 1; }
@@ -275,7 +298,10 @@
         if (e.key === "ArrowRight"&& dx === 0) { dx = 1; dy = 0; }
       });
 
-      gameInterval = setInterval(() => { update(); draw(); }, 200);
+      gameInterval = setInterval(() => {
+        update();
+        draw();
+      }, 200);
     }
   </script>
 </body>
