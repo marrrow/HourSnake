@@ -1,16 +1,15 @@
 // app.js
-require("dotenv").config();  // Load .env variables
-require("./awarding");       // If you have awarding.js for node-cron, require it here
+require("dotenv").config();  
+require("./awarding");  // optional, if you still want hourly awarding
 
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const { Pool } = require("pg");
 const winston = require("winston");
-const bot = require("./bot");  // Telegram bot logic
+const bot = require("./bot");  // if you have your Telegram bot logic
 const path = require("path");
 
-// Environment Variables
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const NODE_ENV = process.env.NODE_ENV || "development";
@@ -25,20 +24,17 @@ const logger = winston.createLogger({
   ],
 });
 
-// PostgreSQL Setup (always SSL for Render)
+// PostgreSQL Setup (optional, if you still want DB for scoreboard)
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ssl: { rejectUnauthorized: false }
 });
 
-// Test DB Connection
 pool.connect()
   .then(() => logger.info("✅ Connected to PostgreSQL database successfully!"))
   .catch((err) => logger.error("❌ Database connection error:", err));
 
-// Express Setup
+// Express setup
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -48,59 +44,59 @@ app.get("/", (req, res) => {
   res.send("HourSnake Backend is running...");
 });
 
-// Telegram Webhook route
+// Telegram Bot updates
 app.post(`/bot${TELEGRAM_TOKEN}`, (req, res) => {
-  bot.processUpdate(req.body); // Pass update to Telegram bot
+  bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-// For reference, let's define your /game routes inline here
-// If you prefer, you can keep them in separate routes/game.js, but here's a single file approach:
+// OLD DB star logic – remove or comment out:
+// --------------------------------------------------
+// app.post("/game/stars", async (req, res) => { /* ... */ });
+// app.post("/game/deduct-star", async (req, res) => { /* ... */ });
+// --------------------------------------------------
 
-// Fetch Stars Endpoint
-app.post("/game/stars", async (req, res) => {
+// Official Telegram Stars: create invoice link
+app.post("/create-invoice", async (req, res) => {
   try {
-    const { telegram_id } = req.body;
-    const result = await pool.query(
-      "SELECT stars FROM users WHERE telegram_id = $1",
-      [telegram_id]
-    );
-    const stars = result.rows[0]?.stars || 0;
-    res.json({ success: true, stars });
-  } catch (error) {
-    logger.error("Error fetching stars:", error);
-    res.status(500).json({ success: false, message: "Error fetching stars." });
-  }
-});
+    const title = "Snake Game Entry";
+    const description = "Pay 1 Star to play!";
+    const payload = "{}";
+    const providerToken = ""; // empty
+    const currency = "XTR";
+    const prices = [{ amount: 1, label: "Game Entry" }];
 
-// Deduct Star Endpoint
-app.post("/game/deduct-star", async (req, res) => {
-  try {
-    const { telegram_id } = req.body;
-    const result = await pool.query(
-      "SELECT stars FROM users WHERE telegram_id = $1",
-      [telegram_id]
-    );
-    const stars = result.rows[0]?.stars || 0;
+    const token = process.env.TELEGRAM_TOKEN;
+    const url = `https://api.telegram.org/bot${token}/createInvoiceLink`;
 
-    if (stars > 0) {
-      await pool.query(
-        "UPDATE users SET stars = stars - 1 WHERE telegram_id = $1",
-        [telegram_id]
-      );
-      res.json({ success: true, message: "Game started! Enjoy playing." });
-    } else {
-      res
-        .status(400)
-        .json({ success: false, message: "Not enough stars to play." });
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        description,
+        payload,
+        provider_token: providerToken,
+        currency,
+        prices
+      })
+    });
+    const data = await response.json();
+    if (!data.ok) {
+      console.error("createInvoiceLink error:", data);
+      return res.status(500).json({ error: data.description });
     }
+
+    const invoiceLink = data.result;
+    console.log("Invoice link created:", invoiceLink);
+    res.json({ invoiceLink });
   } catch (error) {
-    logger.error("Error deducting stars:", error);
-    res.status(500).json({ success: false, message: "Error deducting stars." });
+    console.error("Error creating invoice:", error);
+    res.status(500).json({ error: "Failed to create invoice" });
   }
 });
 
-// A quick /leaderboard for total_score
+// (Optional) scoreboard routes or /leaderboard
 app.get("/leaderboard", async (req, res) => {
   try {
     const result = await pool.query(
@@ -109,15 +105,12 @@ app.get("/leaderboard", async (req, res) => {
     res.json({ success: true, leaderboard: result.rows });
   } catch (error) {
     logger.error("Error fetching leaderboard:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Error fetching leaderboard." });
+    res.status(500).json({ success: false, message: "Error fetching leaderboard." });
   }
 });
 
-// Start Server
+// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
 });
-
