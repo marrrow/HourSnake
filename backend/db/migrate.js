@@ -1,36 +1,47 @@
 // migrate.js
-require("dotenv").config();  // Load variables from .env
+require("dotenv").config();
 const { Pool } = require("pg");
 
-// We'll read DATABASE_URL from .env
-const isProduction = process.env.NODE_ENV === "production";
+// 1) Create a new Pool with your Render DB URL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: isProduction ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false }, // Required for Render
 });
-
 
 async function migrate() {
   try {
     console.log("🚀 Starting migration...");
 
-    // Create the 'users' table if it doesn't exist
+    // 2) Create your `users` table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         telegram_id BIGINT UNIQUE,
-        credits INT DEFAULT 0
+        username TEXT,
+        stars INT DEFAULT 0
       );
     `);
+
+    // 3) (OPTIONAL) Create `scores` table if you want to store game scores
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scores (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id),
+        score INT NOT NULL,
+        hour_start BIGINT NOT NULL
+      );
+    `);
+
+    // ... Add more queries if you want other tables
 
     console.log("✅ Migration completed successfully!");
   } catch (err) {
     console.error("❌ Migration failed:", err);
   } finally {
-    // Close the DB connection
-    pool.end();
+    // 4) close the pool
+    await pool.end();
   }
 }
 
-// Run the migration
+// Run it
 migrate();
