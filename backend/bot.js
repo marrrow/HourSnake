@@ -40,7 +40,7 @@ bot.onText(/\/start/, async (msg) => {
 
   try {
     // Add new user to database if they don't already exist
-    // *** Change '1' to '100' for default stars ***
+    // Setting them to 100 stars by default
     await pool.query(
       `INSERT INTO users (telegram_id, username, stars)
        VALUES ($1, $2, 100)
@@ -119,4 +119,9 @@ bot.on('callback_query', async (query) => {
 
     default: {
       bot.sendMessage(chatId, 'Invalid option.');
-     
+      break;
+    }
+  }
+});
+
+module.exports = bot;
