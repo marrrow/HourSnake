@@ -1,74 +1,59 @@
-// app.js
-require("dotenv").config();  
-require("./awarding");  // optional, if you still want hourly awarding
-
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const { Pool } = require("pg");
-const winston = require("winston");
-const bot = require("./bot");  // if you have your Telegram bot logic
-const path = require("path");
+const TelegramBot = require("node-telegram-bot-api");
 
+// Initialize your bot with token
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const DATABASE_URL = process.env.DATABASE_URL;
-const NODE_ENV = process.env.NODE_ENV || "development";
+const bot = new TelegramBot(TELEGRAM_TOKEN, { webHook: true });
 
-// Logger Setup
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: "app.log" }),
-  ],
-});
+// If you want to set a webhook with Bot API:
+const webhookUrl = `${process.env.WEBHOOK_URL}/bot${TELEGRAM_TOKEN}`;
+bot.setWebHook(webhookUrl)
+  .then(() => console.log(`Webhook set: ${webhookUrl}`))
+  .catch(err => console.error("Error setting webhook:", err));
 
-// PostgreSQL Setup (optional, if you still want DB for scoreboard)
+// Optional: You can keep a DB for storing final scores
+// If you do, you can use Pool below. Or remove it if unneeded.
 const pool = new Pool({
-  connectionString: DATABASE_URL,
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
-
-pool.connect()
-  .then(() => logger.info("✅ Connected to PostgreSQL database successfully!"))
-  .catch((err) => logger.error("❌ Database connection error:", err));
+pool.connect().then(() => {
+  console.log("✅ Connected to PostgreSQL database successfully!");
+}).catch(err => {
+  console.error("❌ Database connection error:", err);
+});
 
 // Express setup
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Basic test route
-app.get("/", (req, res) => {
-  res.send("HourSnake Backend is running...");
-});
-
-// Telegram Bot updates
+// Bot updates
 app.post(`/bot${TELEGRAM_TOKEN}`, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-// OLD DB star logic – remove or comment out:
-// --------------------------------------------------
-// app.post("/game/stars", async (req, res) => { /* ... */ });
-// app.post("/game/deduct-star", async (req, res) => { /* ... */ });
-// --------------------------------------------------
-
-// Official Telegram Stars: create invoice link
+// ---------------------------------------------------------------------
+// Create /create-invoice route for official Telegram Stars
+// ---------------------------------------------------------------------
 app.post("/create-invoice", async (req, res) => {
   try {
+    // 1 star game entry
     const title = "Snake Game Entry";
     const description = "Pay 1 Star to play!";
-    const payload = "{}";
-    const providerToken = ""; // empty
-    const currency = "XTR";
+    const payload = "{}";      // optional JSON payload
+    const providerToken = "";  // empty string => official Stars
+    const currency = "XTR";    // 'XTR' = Telegram Stars
     const prices = [{ amount: 1, label: "Game Entry" }];
 
-    const token = process.env.TELEGRAM_TOKEN;
-    const url = `https://api.telegram.org/bot${token}/createInvoiceLink`;
-
+    // If node-telegram-bot-api library doesn't have createInvoiceLink,
+    // call the raw /createInvoiceLink endpoint:
+    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/createInvoiceLink`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -82,12 +67,13 @@ app.post("/create-invoice", async (req, res) => {
       })
     });
     const data = await response.json();
+
     if (!data.ok) {
       console.error("createInvoiceLink error:", data);
       return res.status(500).json({ error: data.description });
     }
 
-    const invoiceLink = data.result;
+    const invoiceLink = data.result; // The actual invoice URL
     console.log("Invoice link created:", invoiceLink);
     res.json({ invoiceLink });
   } catch (error) {
@@ -96,21 +82,39 @@ app.post("/create-invoice", async (req, res) => {
   }
 });
 
-// (Optional) scoreboard routes or /leaderboard
-app.get("/leaderboard", async (req, res) => {
+// ---------------------------------------------------------------------
+// (Optional) Handle scoreboard or final scores if you'd like
+// ---------------------------------------------------------------------
+app.post("/game/submit-score", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT username, total_score FROM users ORDER BY total_score DESC LIMIT 10"
-    );
-    res.json({ success: true, leaderboard: result.rows });
-  } catch (error) {
-    logger.error("Error fetching leaderboard:", error);
+    const { telegram_id, score } = req.body;
+    // Save it in DB or do something else.
+    // Example pseudo:
+    // await pool.query(
+    //   'INSERT INTO scores (telegram_id, score, hour_start) ... etc'
+    // );
+    console.log(`User ${telegram_id} finished with score: ${score}`);
+    return res.json({ success: true, message: "Score recorded" });
+  } catch (err) {
+    console.error("Error submitting score:", err);
+    res.status(500).json({ success: false, message: "Error saving score" });
+  }
+});
+
+// (Optional) current-leaderboard route if you track hour-based scores
+app.get("/current-leaderboard", async (req, res) => {
+  try {
+    // Return an object like: { success: true, leaderboard: [ ... ] }
+    // For demonstration:
+    res.json({ success: true, leaderboard: [] });
+  } catch (err) {
+    console.error("Error fetching leaderboard:", err);
     res.status(500).json({ success: false, message: "Error fetching leaderboard." });
   }
 });
 
-// Start server
+// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  logger.info(`🚀 Server running on port ${PORT}`);
+  console.log("🚀 Server running on port", PORT);
 });
