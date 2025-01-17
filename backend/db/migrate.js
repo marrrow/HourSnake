@@ -1,3 +1,4 @@
+// migrate.js
 require("dotenv").config();
 const { Pool } = require("pg");
 const winston = require("winston");
@@ -12,17 +13,16 @@ const logger = winston.createLogger({
   ],
 });
 
-// PostgreSQL Connection Setup
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
-// Migration Function
 async function migrate() {
   try {
     logger.info("🚀 Starting database migration...");
 
+    // Create users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -30,6 +30,17 @@ async function migrate() {
         username TEXT,
         stars INT DEFAULT 0,
         total_score INT DEFAULT 0
+      );
+    `);
+
+    // Create scores table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scores (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        score INT NOT NULL,
+        hour_start BIGINT NOT NULL,
+        UNIQUE (user_id, hour_start)
       );
     `);
 
@@ -41,5 +52,4 @@ async function migrate() {
   }
 }
 
-// Run Migration
 migrate();

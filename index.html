@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>HourSnake Game</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
@@ -29,7 +29,10 @@
       background: #000;
     }
 
-    #stars, #leaderboard, #countdown {
+    /* Simple spacing and centering for status elements */
+    #stars,
+    #leaderboard,
+    #countdown {
       margin: 10px 0;
       text-align: center;
     }
@@ -68,10 +71,20 @@
 </head>
 <body>
   <h1>Snake Game</h1>
+
+  <!-- Display user’s current star balance -->
   <div id="stars">Stars: Loading...</div>
+
+  <!-- Pay 1 star to start playing -->
   <button id="play-button" onclick="payAndStartGame()">Play for 1 Star</button>
+
+  <!-- Countdown to the next hour (awards time) -->
   <div id="countdown">Next rewards in: Loading...</div>
+
+  <!-- Current hour’s top 10 scoreboard -->
   <div id="leaderboard">Leaderboard: Loading...</div>
+
+  <!-- Main game container with a canvas and “game over” overlay -->
   <div id="game-container">
     <canvas id="game-canvas" width="400" height="400"></canvas>
     <div id="game-over">
@@ -80,12 +93,16 @@
       <button onclick="restartGame()">Play Again</button>
     </div>
   </div>
-  <script>
-    const backendUrl = "https://hoursnake.onrender.com";
-    let telegramUserId; // Declare variable globally
 
-    // Initialize Telegram WebApp and handle errors
+  <script>
+    // ---------------------------
+    // 1. Telegram WebApp Setup
+    // ---------------------------
+    const backendUrl = "https://hoursnake.onrender.com"; // Replace if needed
+    let telegramUserId;
+
     window.onload = function () {
+      // Initialize Telegram WebApp
       try {
         const telegram = Telegram.WebApp;
         telegramUserId = telegram.initDataUnsafe?.user?.id;
@@ -99,18 +116,20 @@
         alert("Failed to initialize Telegram WebApp. Ensure you're running this through Telegram.");
       }
 
-      // Fetch stars and leaderboard after initialization
+      // Initial fetches
       fetchStars();
-      fetchLeaderboard();
+      fetchCurrentLeaderboard();
+
+      // Start intervals for countdown and leaderboard updates
+      setInterval(updateCountdown, 1000);       // update countdown every second
+      setInterval(fetchCurrentLeaderboard, 10000); // update leaderboard every 10 seconds
     };
 
-    // Fetch stars
+    // ---------------------------
+    // 2. Star Balance
+    // ---------------------------
     async function fetchStars() {
-      if (!telegramUserId) {
-        console.error("Telegram User ID is missing.");
-        return;
-      }
-
+      if (!telegramUserId) return;
       try {
         const response = await fetch(`${backendUrl}/game/stars`, {
           method: "POST",
@@ -125,7 +144,6 @@
       }
     }
 
-    // Deduct star and start the game
     async function payAndStartGame() {
       if (!telegramUserId) {
         alert("Telegram User ID is missing. Please ensure you're accessing the game from Telegram.");
@@ -140,8 +158,12 @@
         });
         const data = await response.json();
         if (data.success) {
+          // Disable the button until game ends
           document.getElementById("play-button").disabled = true;
-          startGame(); // Start Snake Game
+          // After paying, we can fetch updated star count
+          fetchStars();
+          // Start the snake game
+          startGame();
         } else {
           alert(data.message || "Failed to deduct star.");
         }
@@ -150,29 +172,52 @@
       }
     }
 
-    // Fetch leaderboard
-    async function fetchLeaderboard() {
+    // ---------------------------
+    // 3. Real-Time Countdown
+    // ---------------------------
+    function updateCountdown() {
+      const now = Date.now();
+      // Next hour boundary
+      const nextHour = now - (now % 3600000) + 3600000;
+      const diffMs = nextHour - now;
+      const minutes = Math.floor(diffMs / 60000);
+      const seconds = Math.floor((diffMs % 60000) / 1000);
+
+      document.getElementById('countdown').innerText =
+        `Next rewards in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    // ---------------------------
+    // 4. Leaderboard (Current Hour)
+    // ---------------------------
+    async function fetchCurrentLeaderboard() {
       try {
-        const response = await fetch(`${backendUrl}/leaderboard`);
+        const response = await fetch(`${backendUrl}/current-leaderboard`);
         const data = await response.json();
         if (data.success) {
-          const leaderboardHTML = data.leaderboard
-            .map((entry, index) => `<p>${index + 1}. ${entry.username || "Anonymous"} - ${entry.total_score}</p>`)
-            .join("");
+          let leaderboardHTML = '<h3>Current Hour Leaderboard</h3>';
+          data.leaderboard.forEach((entry, index) => {
+            leaderboardHTML += `<p>${index+1}. ${entry.username || 'Anonymous'} - ${entry.score}</p>`;
+          });
           document.getElementById("leaderboard").innerHTML = leaderboardHTML;
         } else {
           document.getElementById("leaderboard").innerHTML = "Error loading leaderboard.";
         }
       } catch (error) {
-        console.error("Error fetching leaderboard:", error);
+        console.error("Error fetching current-hour leaderboard:", error);
         document.getElementById("leaderboard").innerHTML = "Leaderboard: Error";
       }
     }
 
-    // Snake Game Logic
+    // ---------------------------
+    // 5. Snake Game Logic
+    // ---------------------------
+    let gameInterval; // keep a reference for clearing
+
     function startGame() {
       const canvas = document.getElementById("game-canvas");
       const ctx = canvas.getContext("2d");
+
       let snake = [{ x: 10, y: 10 }];
       let food = { x: 15, y: 15 };
       let dx = 1, dy = 0;
@@ -180,26 +225,37 @@
 
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw snake
         snake.forEach(segment => {
           ctx.fillStyle = "lime";
           ctx.fillRect(segment.x * 20, segment.y * 20, 20, 20);
         });
+        // Draw food
         ctx.fillStyle = "red";
         ctx.fillRect(food.x * 20, food.y * 20, 20, 20);
       }
 
       function update() {
         const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+        // Check if we ate the food
         if (head.x === food.x && head.y === food.y) {
           score++;
-          food = { x: Math.floor(Math.random() * 20), y: Math.floor(Math.random() * 20) };
+          food = {
+            x: Math.floor(Math.random() * 20),
+            y: Math.floor(Math.random() * 20)
+          };
         } else {
+          // Remove the tail
           snake.pop();
         }
+        // Add the new head
         snake.unshift(head);
 
+        // Check collision with walls or self
         if (
-          head.x < 0 || head.y < 0 || head.x >= 20 || head.y >= 20 ||
+          head.x < 0 || head.y < 0 ||
+          head.x >= 20 || head.y >= 20 ||
           snake.slice(1).some(segment => segment.x === head.x && segment.y === head.y)
         ) {
           endGame(score);
@@ -210,21 +266,54 @@
         clearInterval(gameInterval);
         document.getElementById("final-score").innerText = finalScore;
         document.getElementById("game-over").style.display = "block";
+
+        // Re-enable the play button so user can pay star again if they want
+        document.getElementById("play-button").disabled = false;
+
+        // ----------------------
+        // Submit score to server
+        // ----------------------
+        if (telegramUserId && typeof finalScore === 'number') {
+          fetch(`${backendUrl}/game/submit-score`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegram_id: telegramUserId,
+              score: finalScore
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('Score submission response:', data);
+            // Optionally refetch leaderboard now
+            fetchCurrentLeaderboard();
+          })
+          .catch(err => console.error('Error submitting score:', err));
+        }
       }
 
       function restartGame() {
+        // Hide the Game Over overlay
+        document.getElementById("game-over").style.display = "none";
+        // Clear any old interval
+        clearInterval(gameInterval);
+
+        // If you want the user to pay again each time, 
+        // you can just call `payAndStartGame()` here 
+        // OR you can allow free restarts in the same attempt:
+        // For now, we do a free restart logic so they don’t pay again.
         snake = [{ x: 10, y: 10 }];
         food = { x: 15, y: 15 };
-        dx = 1;
-        dy = 0;
+        dx = 1; dy = 0;
         score = 0;
-        document.getElementById("game-over").style.display = "none";
+
         gameInterval = setInterval(() => {
           update();
           draw();
         }, 200);
       }
 
+      // Key controls
       document.addEventListener("keydown", event => {
         if (event.key === "ArrowUp" && dy === 0) { dx = 0; dy = -1; }
         if (event.key === "ArrowDown" && dy === 0) { dx = 0; dy = 1; }
@@ -232,11 +321,17 @@
         if (event.key === "ArrowRight" && dx === 0) { dx = 1; dy = 0; }
       });
 
-      let gameInterval = setInterval(() => {
+      // Start the main game loop
+      gameInterval = setInterval(() => {
         update();
         draw();
       }, 200);
     }
+
+    // Expose restartGame to the global scope so we can call it from the button
+    window.restartGame = function() {
+      restartGame();
+    };
   </script>
 </body>
 </html>

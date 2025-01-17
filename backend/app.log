@@ -4,3 +4,5 @@
 {"level":"info","message":"✅ Connected to PostgreSQL database successfully!"}
 {"level":"info","message":"🚀 Server running on port 3000"}
 {"level":"info","message":"✅ Connected to PostgreSQL database successfully!"}
+{"level":"info","message":"🚀 Server running on port 3000"}
+{"code":"28000","length":37,"level":"error","message":"❌ Database connection error: SSL/TLS required","name":"error","severity":"FATAL","stack":"error: SSL/TLS required\n    at /Users/matsveyeu/HourSnakeBot/backend/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)"}

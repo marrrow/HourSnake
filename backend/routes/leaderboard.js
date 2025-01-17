@@ -4,26 +4,26 @@ const db = require('../db');
 const { logError } = require('../utils/errorHandler');
 
 // Fetch top 10 players for the leaderboard
-router.get('/', async (req, res) => {
-    try {
-        const result = await db.query(
-            `SELECT username, total_score 
-             FROM users 
-             ORDER BY total_score DESC 
-             LIMIT 10`
-        );
+// e.g. in routes/game.js or routes/leaderboard.js
+router.get('/current-leaderboard', async (req, res) => {
+  try {
+    const hourStart = Math.floor(Date.now() / 3600000);
+    // Join with users to get username
+    const result = await db.query(`
+      SELECT u.username, s.score
+      FROM scores s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.hour_start = $1
+      ORDER BY s.score DESC
+      LIMIT 10
+    `, [hourStart]);
 
-        const leaderboard = result.rows.map((player, index) => ({
-            rank: index + 1,
-            username: player.username || "Anonymous",
-            total_score: player.total_score || 0,
-        }));
-
-        res.json({ success: true, leaderboard });
-    } catch (err) {
-        logError(err, 'Error fetching leaderboard');
-        res.status(500).json({ success: false, error: 'Failed to fetch leaderboard' });
-    }
+    return res.json({ success: true, leaderboard: result.rows });
+  } catch (err) {
+    console.error('Error fetching current hour leaderboard:', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
 });
+
 
 module.exports = router;

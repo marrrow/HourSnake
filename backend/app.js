@@ -1,4 +1,6 @@
 require("dotenv").config();
+// In app.js
+require('./awarding'); // or require('./backend/awarding');
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
