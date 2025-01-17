@@ -2,3 +2,7 @@
 {"level":"info","message":"✅ Migration completed successfully!"}
 {"level":"info","message":"🚀 Starting database migration..."}
 {"level":"info","message":"✅ Migration completed successfully!"}
+{"level":"info","message":"🚀 Starting database migration..."}
+{"code":"28000","length":37,"level":"error","message":"❌ Migration failed: SSL/TLS required","name":"error","severity":"FATAL","stack":"error: SSL/TLS required\n    at /Users/matsveyeu/HourSnakeBot/backend/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async migrate (/Users/matsveyeu/HourSnakeBot/backend/db/migrate.js:26:5)"}
+{"level":"info","message":"🚀 Starting database migration..."}
+{"level":"error","message":"❌ Migration failed: Connection terminated unexpectedly","stack":"Error: Connection terminated unexpectedly\n    at /Users/matsveyeu/HourSnakeBot/backend/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async migrate (/Users/matsveyeu/HourSnakeBot/backend/db/migrate.js:26:5)"}

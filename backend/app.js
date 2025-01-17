@@ -1,28 +1,19 @@
-require("dotenv").config();
-// In app.js
-require('./awarding'); // or require('./backend/awarding');
+// app.js
+require("dotenv").config();  // Load .env variables
+require("./awarding");       // If you have awarding.js for node-cron, require it here
+
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const { Pool } = require("pg");
 const winston = require("winston");
-const bot = require("./bot");
+const bot = require("./bot");  // Telegram bot logic
+const path = require("path");
 
 // Environment Variables
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const NODE_ENV = process.env.NODE_ENV || "development";
-
-// PostgreSQL Setup
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
-});
-
-// Express Setup
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
 
 // Logger Setup
 const logger = winston.createLogger({
@@ -34,27 +25,46 @@ const logger = winston.createLogger({
   ],
 });
 
+// PostgreSQL Setup (always SSL for Render)
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
 // Test DB Connection
 pool.connect()
   .then(() => logger.info("✅ Connected to PostgreSQL database successfully!"))
   .catch((err) => logger.error("❌ Database connection error:", err));
 
-// Test Route
+// Express Setup
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
+// Basic test route
 app.get("/", (req, res) => {
   res.send("HourSnake Backend is running...");
 });
 
-// Add the Webhook Route
+// Telegram Webhook route
 app.post(`/bot${TELEGRAM_TOKEN}`, (req, res) => {
   bot.processUpdate(req.body); // Pass update to Telegram bot
   res.sendStatus(200);
 });
 
+// For reference, let's define your /game routes inline here
+// If you prefer, you can keep them in separate routes/game.js, but here's a single file approach:
+
 // Fetch Stars Endpoint
 app.post("/game/stars", async (req, res) => {
   try {
     const { telegram_id } = req.body;
-    const result = await pool.query("SELECT stars FROM users WHERE telegram_id = $1", [telegram_id]);
+    const result = await pool.query(
+      "SELECT stars FROM users WHERE telegram_id = $1",
+      [telegram_id]
+    );
     const stars = result.rows[0]?.stars || 0;
     res.json({ success: true, stars });
   } catch (error) {
@@ -67,14 +77,22 @@ app.post("/game/stars", async (req, res) => {
 app.post("/game/deduct-star", async (req, res) => {
   try {
     const { telegram_id } = req.body;
-    const result = await pool.query("SELECT stars FROM users WHERE telegram_id = $1", [telegram_id]);
+    const result = await pool.query(
+      "SELECT stars FROM users WHERE telegram_id = $1",
+      [telegram_id]
+    );
     const stars = result.rows[0]?.stars || 0;
 
     if (stars > 0) {
-      await pool.query("UPDATE users SET stars = stars - 1 WHERE telegram_id = $1", [telegram_id]);
+      await pool.query(
+        "UPDATE users SET stars = stars - 1 WHERE telegram_id = $1",
+        [telegram_id]
+      );
       res.json({ success: true, message: "Game started! Enjoy playing." });
     } else {
-      res.status(400).json({ success: false, message: "Not enough stars to play." });
+      res
+        .status(400)
+        .json({ success: false, message: "Not enough stars to play." });
     }
   } catch (error) {
     logger.error("Error deducting stars:", error);
@@ -82,7 +100,7 @@ app.post("/game/deduct-star", async (req, res) => {
   }
 });
 
-// Fetch Leaderboard
+// A quick /leaderboard for total_score
 app.get("/leaderboard", async (req, res) => {
   try {
     const result = await pool.query(
@@ -91,7 +109,9 @@ app.get("/leaderboard", async (req, res) => {
     res.json({ success: true, leaderboard: result.rows });
   } catch (error) {
     logger.error("Error fetching leaderboard:", error);
-    res.status(500).json({ success: false, message: "Error fetching leaderboard." });
+    res
+      .status(500)
+      .json({ success: false, message: "Error fetching leaderboard." });
   }
 });
 
@@ -100,3 +120,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
 });
+

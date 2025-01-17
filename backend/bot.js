@@ -1,3 +1,4 @@
+// bot.js
 const TelegramBot = require('node-telegram-bot-api');
 const { Pool } = require('pg');
 
@@ -8,14 +9,20 @@ const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { webHook: true });
 const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_TOKEN}`;
 bot.setWebHook(webhookUrl)
   .then(() => console.log(`Webhook successfully set: ${webhookUrl}`))
-  .catch((err) => console.error('Error setting webhook:', err.message, err.response?.body || 'No response body'));
+  .catch((err) =>
+    console.error(
+      'Error setting webhook:',
+      err.message,
+      err.response?.body || 'No response body'
+    )
+  );
 
 // Connect to PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false, // Required for managed PostgreSQL on Render
-  },
+    rejectUnauthorized: false // Required for managed PostgreSQL on Render
+  }
 });
 
 // Handle /start command
@@ -33,11 +40,15 @@ bot.onText(/\/start/, async (msg) => {
 
   try {
     // Add new user to database if they don't already exist
+    // *** Change '1' to '100' for default stars ***
     await pool.query(
-      'INSERT INTO users (telegram_id, username, stars) VALUES ($1, $2, 1) ON CONFLICT (telegram_id) DO NOTHING',
+      `INSERT INTO users (telegram_id, username, stars)
+       VALUES ($1, $2, 100)
+       ON CONFLICT (telegram_id) DO NOTHING`,
       [msg.from.id, msg.from.username || 'Anonymous']
     );
 
+    // Send welcome message + keyboard
     bot.sendMessage(
       chatId,
       'Welcome to HourSnake! 🐍\n\n' +
@@ -45,7 +56,8 @@ bot.onText(/\/start/, async (msg) => {
         '• Win hourly competitions for rewards:\n' +
         '  1st place: 50 stars\n' +
         '  2nd place: 25 stars\n' +
-        '  3rd place: 10 stars',
+        '  3rd place: 10 stars\n\n' +
+        'Press "Play Snake" below to open the game!',
       { reply_markup: keyboard }
     );
   } catch (error) {
@@ -73,11 +85,13 @@ bot.on('callback_query', async (query) => {
       }
       break;
     }
+
     case 'leaderboard': {
       try {
-        const hourStart = Math.floor(Date.now() / (1000 * 60 * 60)); // Current hour
+        // Example: current hour scoreboard from 'scores' table
+        const hourStart = Math.floor(Date.now() / (1000 * 60 * 60));
         const result = await pool.query(
-          `SELECT username, score 
+          `SELECT u.username, s.score 
            FROM scores s
            JOIN users u ON s.user_id = u.id
            WHERE hour_start = $1
@@ -87,9 +101,13 @@ bot.on('callback_query', async (query) => {
         );
 
         let message = '🏆 Current Hour Leaders:\n\n';
-        result.rows.forEach((row, i) => {
-          message += `${i + 1}. ${row.username || 'Anonymous'}: ${row.score}\n`;
-        });
+        if (result.rows.length === 0) {
+          message += 'No scores yet this hour.';
+        } else {
+          result.rows.forEach((row, i) => {
+            message += `${i + 1}. ${row.username || 'Anonymous'}: ${row.score}\n`;
+          });
+        }
 
         bot.sendMessage(chatId, message);
       } catch (error) {
@@ -98,11 +116,7 @@ bot.on('callback_query', async (query) => {
       }
       break;
     }
+
     default: {
       bot.sendMessage(chatId, 'Invalid option.');
-      break;
-    }
-  }
-});
-
-module.exports = bot;
+     
