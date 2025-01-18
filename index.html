@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <!-- Add meta viewport for mobile scaling -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HourSnake - Mobile Friendly</title>
+  <meta charset="UTF-8" />
+  <!-- Make it responsive on mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HourSnake - Swipe + Arrow Keys</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
@@ -19,31 +19,13 @@
     }
 
     h1 {
-      margin-bottom: 10px;
+      margin: 10px 0;
       text-align: center;
     }
 
     #credits, #leaderboard, #countdown {
       margin: 10px 0;
       text-align: center;
-    }
-
-    /* Container that auto-resizes for smaller screens */
-    #game-container {
-      position: relative;
-      width: 90vw; /* 90% of viewport width on mobile */
-      max-width: 500px; /* if you want a max on desktop */
-      height: 90vw;
-      max-height: 500px;
-      margin: 20px auto;
-    }
-
-    #game-canvas {
-      border: 2px solid #4CAF50;
-      background: #000;
-      width: 100%;  /* make canvas fill container */
-      height: 100%; /* scale up on mobile */
-      display: block;
     }
 
     button {
@@ -55,14 +37,30 @@
       cursor: pointer;
       margin: 5px;
     }
-
+    button:hover {
+      background: #45a049;
+    }
     button:disabled {
       background: #666;
       cursor: not-allowed;
     }
 
-    button:hover {
-      background: #45a049;
+    /* Responsive container for the canvas */
+    #game-container {
+      position: relative;
+      width: 90vw; /* 90% of screen width on mobile */
+      max-width: 500px; /* limit on desktop */
+      height: 90vw;
+      max-height: 500px;
+      margin: 20px auto;
+      border: 2px solid #4CAF50;
+      background: #000;
+    }
+    /* The canvas inside it is normal 400x400, but scaled by CSS to fill parent */
+    #game-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
     #game-over {
@@ -77,91 +75,74 @@
       text-align: center;
       width: 80%;
     }
-
-    /* On-screen arrow controls for mobile */
-    #mobile-controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-top: 10px;
-      max-width: 300px;
-    }
-    .arrow-btn {
-      width: 60px;
-      height: 60px;
-      margin: 5px;
-      font-size: 1.2em;
-    }
   </style>
 </head>
 <body>
-  <h1>Snake Game (Mobile Friendly)</h1>
+  <h1>Snake Game (Swipe + Arrows)</h1>
 
-  <!-- Display user’s current credits -->
+  <!-- Show user's current credits -->
   <div id="credits">Credits: Loading...</div>
 
-  <!-- Deduct 1 star to start playing -->
+  <!-- Button to pay 1 star per attempt -->
   <button id="pay-button" onclick="payAndStartGame()">Pay 1 Credit to Play</button>
+
+  <!-- Leaderboard button: fetch from the server anytime -->
+  <button id="leaderboard-button" onclick="fetchCurrentLeaderboard()">View Leaderboard</button>
 
   <!-- Quick top-up instructions -->
   <button id="topup-button" onclick="topUpInfo()">Top Up Credits</button>
 
-  <!-- Countdown to the next hour (awards time) -->
+  <!-- Countdown to next hour (if you do hourly rewards) -->
   <div id="countdown">Next rewards in: Loading...</div>
 
   <!-- Current hour’s top 10 scoreboard -->
   <div id="leaderboard">Leaderboard: Loading...</div>
 
-  <!-- Main game container -->
+  <!-- Snake Game Container -->
   <div id="game-container">
     <canvas id="game-canvas" width="400" height="400"></canvas>
+
     <div id="game-over">
       <h2>Game Over!</h2>
       <p>Your score: <span id="final-score">0</span></p>
-      <p>To play again, press "Pay 1 Credit to Play".</p>
-      <!-- we remove any direct 'restart' button that bypasses payment -->
+      <p>Press "Pay 1 Credit to Play" for a new run.</p>
     </div>
-  </div>
-
-  <!-- On-screen arrow controls for mobile/touch -->
-  <div id="mobile-controls">
-    <button class="arrow-btn" onclick="moveUp()">⬆️</button>
-    <div>
-      <button class="arrow-btn" onclick="moveLeft()">⬅️</button>
-      <button class="arrow-btn" onclick="moveRight()">➡️</button>
-    </div>
-    <button class="arrow-btn" onclick="moveDown()">⬇️</button>
   </div>
 
   <script>
     const backendUrl = "https://hoursnake.onrender.com"; 
     let telegramUserId;
 
+    // We store game variables outside
+    let canvas, ctx, gameInterval;
+    let snake, food, dx, dy, score;
+
+    // For swipe detection
+    let touchStartX = null, touchStartY = null;
+    const SWIPE_THRESHOLD = 30; // minimum pixels to count as a swipe
+
     window.onload = function() {
+      // Attempt Telegram initialization
       try {
         const tg = Telegram.WebApp;
-        // Attempt fullscreen or expanded
         tg.requestFullscreen();
-
-        // Get the user’s Telegram ID if available
         telegramUserId = tg.initDataUnsafe?.user?.id;
         if (!telegramUserId) {
-          alert("Unable to fetch Telegram user ID. Please open from Telegram WebApp.");
+          alert("No Telegram user ID. Are you inside Telegram WebApp?");
         }
-      } catch (error) {
-        console.error("Error init Telegram WebApp:", error);
-        alert("Failed to initialize Telegram WebApp. Are you inside Telegram?");
+      } catch (err) {
+        console.error("Error initializing Telegram:", err);
       }
 
-      // Start intervals for countdown + leaderboard
+      // Periodic updates
       setInterval(updateCountdown, 1000);
-      setInterval(fetchCurrentLeaderboard, 10000);
+      setInterval(fetchCurrentLeaderboard, 15000); // update leaderboard every 15s
 
       fetchCredits();
       fetchCurrentLeaderboard();
     };
 
-    // 1) GET CURRENT CREDITS
+    /* ============ 1) GET CURRENT CREDITS ============ */
     async function fetchCredits() {
       if (!telegramUserId) return;
       try {
@@ -176,16 +157,16 @@
         } else {
           document.getElementById("credits").innerText = "Credits: Error";
         }
-      } catch (error) {
-        console.error("Error fetching credits:", error);
+      } catch (err) {
+        console.error("Error fetching credits:", err);
         document.getElementById("credits").innerText = "Credits: Error";
       }
     }
 
-    // 2) DEDUCT 1 CREDIT, THEN START GAME
+    /* ============ 2) PAY 1 STAR, THEN START GAME ============ */
     async function payAndStartGame() {
       if (!telegramUserId) {
-        alert("No Telegram user ID found. Are we in Telegram?");
+        alert("No Telegram user ID. Are we inside Telegram?");
         return;
       }
       try {
@@ -209,23 +190,13 @@
       }
     }
 
-    // 3) Quick instructions for top-up
     function topUpInfo() {
-      alert("To top up credits, contact admin or pay on a website.\nThen the admin calls /admin/manual-topup with your Telegram ID.\nAfter that, re-check your credits here!");
+      alert("To top up credits, contact admin or a website.\n" +
+            "Then admin calls /admin/manual-topup with your ID.\n" +
+            "Refresh credits here after!");
     }
 
-    // 4) Countdown to next hour
-    function updateCountdown() {
-      const now = Date.now();
-      const nextHour = now - (now % 3600000) + 3600000;
-      const diff = nextHour - now;
-      const m = Math.floor(diff / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      document.getElementById('countdown').innerText =
-        `Next rewards in: ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    }
-
-    // 5) Leaderboard
+    /* ============ 3) LEADERBOARD ============ */
     async function fetchCurrentLeaderboard() {
       try {
         const resp = await fetch(`${backendUrl}/current-leaderboard`);
@@ -235,7 +206,7 @@
           return;
         }
         let html = "<h3>Current Hour Leaderboard</h3>";
-        if (!data.leaderboard.length) {
+        if (data.leaderboard.length === 0) {
           html += "<p>No scores yet this hour.</p>";
         } else {
           data.leaderboard.forEach((entry, idx) => {
@@ -249,16 +220,23 @@
       }
     }
 
-    // 6) SNAKE GAME LOGIC
-    let gameInterval;
-    let canvas, ctx;
-    let snake, food, dx, dy, score;
+    /* ============ 4) COUNTDOWN ============ */
+    function updateCountdown() {
+      const now = Date.now();
+      const nextHour = now - (now % 3600000) + 3600000;
+      const diff = nextHour - now;
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      document.getElementById("countdown").innerText =
+        `Next rewards in: ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
 
+    /* ============ 5) SNAKE GAME LOGIC ============ */
     function startGame() {
-      // Hide 'game-over' overlay if it was open
+      // Hide game-over overlay if visible
       document.getElementById("game-over").style.display = "none";
 
-      // Prepare the snake
+      // Initialize snake data
       snake = [{ x: 10, y: 10 }];
       food = { x: 15, y: 15 };
       dx = 1; dy = 0;
@@ -267,7 +245,13 @@
       canvas = document.getElementById("game-canvas");
       ctx = canvas.getContext("2d");
 
-      // We run game loop 5 times/sec
+      // Keydown for arrow keys
+      document.addEventListener("keydown", handleKeyDown);
+      // Touch events for swipes
+      canvas.addEventListener("touchstart", handleTouchStart, false);
+      canvas.addEventListener("touchend", handleTouchEnd, false);
+
+      // Game loop
       gameInterval = setInterval(() => {
         update();
         draw();
@@ -275,8 +259,7 @@
     }
 
     function draw() {
-      // Because we stretched the canvas with CSS, let's get its "internal" scale:
-      // But for simplicity, let's just draw in 20x20 cells (the default).
+      // Clear
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Draw snake
@@ -291,8 +274,9 @@
     }
 
     function update() {
+      // Next head
       const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-      // Check if snake ate the food
+      // Check eat
       if (head.x === food.x && head.y === food.y) {
         score++;
         food = {
@@ -300,13 +284,12 @@
           y: Math.floor(Math.random() * 20)
         };
       } else {
-        // remove tail
-        snake.pop();
+        snake.pop(); // remove tail
       }
-      // add new head
+      // Add new head
       snake.unshift(head);
 
-      // collision check (walls or self)
+      // Check collision (walls or self)
       if (
         head.x < 0 || head.y < 0 ||
         head.x >= 20 || head.y >= 20 ||
@@ -318,46 +301,103 @@
 
     function endGame(finalScore) {
       clearInterval(gameInterval);
+
+      // Remove event listeners so we don't double up
+      document.removeEventListener("keydown", handleKeyDown);
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      canvas.removeEventListener("touchend", handleTouchEnd);
+
+      // Show overlay
       document.getElementById("final-score").innerText = finalScore;
       document.getElementById("game-over").style.display = "block";
 
-      // Re-enable the pay button for next attempt
+      // Re-enable pay button
       document.getElementById("pay-button").disabled = false;
 
-      // Submit score to server
-      if (telegramUserId && typeof finalScore === 'number') {
+      // Submit final score
+      if (telegramUserId && typeof finalScore === "number") {
         fetch(`${backendUrl}/game/submit-score`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ telegram_id: telegramUserId, score: finalScore })
         })
         .then(r => r.json())
         .then(resp => {
           console.log("Score submission response:", resp);
-          // Refresh leaderboard after new score
+          // Refresh leaderboard
           fetchCurrentLeaderboard();
         })
         .catch(err => console.error("Error submitting score:", err));
       }
     }
 
-    /* We remove the "restartGame()" button that bypasses payment. 
-       If you want a "Play Again" button inside #game-over, 
-       it should call payAndStartGame(), not direct restartGame(). 
-    */
+    // 6) ARROW KEY CONTROLS (no click needed)
+    function handleKeyDown(e) {
+      e.preventDefault(); // so arrow keys won't scroll on mobile
+      switch(e.key) {
+        case "ArrowUp":
+          if (dy === 0) { dx = 0; dy = -1; }
+          break;
+        case "ArrowDown":
+          if (dy === 0) { dx = 0; dy = 1; }
+          break;
+        case "ArrowLeft":
+          if (dx === 0) { dx = -1; dy = 0; }
+          break;
+        case "ArrowRight":
+          if (dx === 0) { dx = 1; dy = 0; }
+          break;
+        default:
+          break;
+      }
+    }
 
-    // On-screen arrow controls for mobile
-    function moveUp() {
-      if (dy === 0) { dx = 0; dy = -1; }
+    // 7) SWIPE CONTROLS (mobile)
+    function handleTouchStart(e) {
+      if (e.touches.length === 1) {
+        // single touch
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
     }
-    function moveDown() {
-      if (dy === 0) { dx = 0; dy = 1; }
-    }
-    function moveLeft() {
-      if (dx === 0) { dx = -1; dy = 0; }
-    }
-    function moveRight() {
-      if (dx === 0) { dx = 1; dy = 0; }
+
+    function handleTouchEnd(e) {
+      if (!touchStartX || !touchStartY) return;
+      const xUp = e.changedTouches[0].clientX;
+      const yUp = e.changedTouches[0].clientY;
+
+      const dxSwipe = xUp - touchStartX;
+      const dySwipe = yUp - touchStartY;
+
+      // reset
+      touchStartX = null;
+      touchStartY = null;
+
+      if (Math.abs(dxSwipe) < SWIPE_THRESHOLD && Math.abs(dySwipe) < SWIPE_THRESHOLD) {
+        // swipe not big enough
+        return;
+      }
+
+      // horizontal vs vertical
+      if (Math.abs(dxSwipe) > Math.abs(dySwipe)) {
+        // horizontal
+        if (dxSwipe > 0) {
+          // right
+          if (dx === 0) { dx = 1; dy = 0; }
+        } else {
+          // left
+          if (dx === 0) { dx = -1; dy = 0; }
+        }
+      } else {
+        // vertical
+        if (dySwipe > 0) {
+          // down
+          if (dy === 0) { dx = 0; dy = 1; }
+        } else {
+          // up
+          if (dy === 0) { dx = 0; dy = -1; }
+        }
+      }
     }
   </script>
 </body>
