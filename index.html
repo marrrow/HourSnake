@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HourSnake - Local Credits</title>
+  <!-- Add meta viewport for mobile scaling -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HourSnake - Mobile Friendly</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
@@ -15,20 +17,35 @@
       margin: 0;
       padding: 20px;
     }
-    #game-container {
-      position: relative;
-      width: 400px;
-      height: 400px;
-      margin: 20px;
+
+    h1 {
+      margin-bottom: 10px;
+      text-align: center;
     }
-    #game-canvas {
-      border: 2px solid #4CAF50;
-      background: #000;
-    }
+
     #credits, #leaderboard, #countdown {
       margin: 10px 0;
       text-align: center;
     }
+
+    /* Container that auto-resizes for smaller screens */
+    #game-container {
+      position: relative;
+      width: 90vw; /* 90% of viewport width on mobile */
+      max-width: 500px; /* if you want a max on desktop */
+      height: 90vw;
+      max-height: 500px;
+      margin: 20px auto;
+    }
+
+    #game-canvas {
+      border: 2px solid #4CAF50;
+      background: #000;
+      width: 100%;  /* make canvas fill container */
+      height: 100%; /* scale up on mobile */
+      display: block;
+    }
+
     button {
       background: #4CAF50;
       border: none;
@@ -38,13 +55,16 @@
       cursor: pointer;
       margin: 5px;
     }
+
     button:disabled {
       background: #666;
       cursor: not-allowed;
     }
+
     button:hover {
       background: #45a049;
     }
+
     #game-over {
       display: none;
       position: absolute;
@@ -55,61 +75,88 @@
       padding: 20px;
       border-radius: 10px;
       text-align: center;
+      width: 80%;
+    }
+
+    /* On-screen arrow controls for mobile */
+    #mobile-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 10px;
+      max-width: 300px;
+    }
+    .arrow-btn {
+      width: 60px;
+      height: 60px;
+      margin: 5px;
+      font-size: 1.2em;
     }
   </style>
 </head>
 <body>
-  <h1>Snake Game (Local Credits)</h1>
+  <h1>Snake Game (Mobile Friendly)</h1>
 
-  <!-- Button to show user's current credits -->
-  <div id="credits">Credits: (Loading...)</div>
+  <!-- Display user’s current credits -->
+  <div id="credits">Credits: Loading...</div>
 
-  <!-- Button that attempts to pay 1 credit -->
+  <!-- Deduct 1 star to start playing -->
   <button id="pay-button" onclick="payAndStartGame()">Pay 1 Credit to Play</button>
 
-  <!-- Optional: A top-up button or instructions, so they pay you externally, then you do manual-topup -->
+  <!-- Quick top-up instructions -->
   <button id="topup-button" onclick="topUpInfo()">Top Up Credits</button>
 
-  <!-- A countdown label for next hour, or any logic you want -->
+  <!-- Countdown to the next hour (awards time) -->
   <div id="countdown">Next rewards in: Loading...</div>
 
-  <!-- Leaderboard if you have a scoreboard on your server -->
+  <!-- Current hour’s top 10 scoreboard -->
   <div id="leaderboard">Leaderboard: Loading...</div>
 
-  <!-- The Snake game container + game over overlay -->
+  <!-- Main game container -->
   <div id="game-container">
     <canvas id="game-canvas" width="400" height="400"></canvas>
     <div id="game-over">
       <h2>Game Over!</h2>
       <p>Your score: <span id="final-score">0</span></p>
-      <button onclick="restartGame()">Play Again</button>
+      <p>To play again, press "Pay 1 Credit to Play".</p>
+      <!-- we remove any direct 'restart' button that bypasses payment -->
     </div>
   </div>
 
+  <!-- On-screen arrow controls for mobile/touch -->
+  <div id="mobile-controls">
+    <button class="arrow-btn" onclick="moveUp()">⬆️</button>
+    <div>
+      <button class="arrow-btn" onclick="moveLeft()">⬅️</button>
+      <button class="arrow-btn" onclick="moveRight()">➡️</button>
+    </div>
+    <button class="arrow-btn" onclick="moveDown()">⬇️</button>
+  </div>
+
   <script>
-    const backendUrl = "https://hoursnake.onrender.com"; // your deployed server
+    const backendUrl = "https://hoursnake.onrender.com"; 
     let telegramUserId;
 
-    // On load, attempt to init Telegram
     window.onload = function() {
       try {
         const tg = Telegram.WebApp;
+        // Attempt fullscreen or expanded
         tg.requestFullscreen();
 
+        // Get the user’s Telegram ID if available
         telegramUserId = tg.initDataUnsafe?.user?.id;
         if (!telegramUserId) {
-          alert("Unable to fetch Telegram user ID. Please open from Telegram.");
+          alert("Unable to fetch Telegram user ID. Please open from Telegram WebApp.");
         }
       } catch (error) {
         console.error("Error init Telegram WebApp:", error);
         alert("Failed to initialize Telegram WebApp. Are you inside Telegram?");
       }
 
-      // Start intervals
+      // Start intervals for countdown + leaderboard
       setInterval(updateCountdown, 1000);
       setInterval(fetchCurrentLeaderboard, 10000);
 
-      // Fetch credits once on load
       fetchCredits();
       fetchCurrentLeaderboard();
     };
@@ -138,7 +185,7 @@
     // 2) DEDUCT 1 CREDIT, THEN START GAME
     async function payAndStartGame() {
       if (!telegramUserId) {
-        alert("User ID missing. Are we in Telegram?");
+        alert("No Telegram user ID found. Are we in Telegram?");
         return;
       }
       try {
@@ -149,9 +196,8 @@
         });
         const data = await resp.json();
         if (data.success) {
-          alert("1 credit deducted. Starting game...");
+          alert("1 credit deducted. Starting snake...");
           document.getElementById("pay-button").disabled = true;
-          // re-fetch credits after deduct
           fetchCredits();
           startGame();
         } else {
@@ -159,25 +205,22 @@
         }
       } catch (error) {
         console.error("Error deducting credit:", error);
-        alert("Could not deduct credit. Check console.");
+        alert("Could not deduct credit. Check console logs.");
       }
     }
 
-    // 3) Optional top up instructions
+    // 3) Quick instructions for top-up
     function topUpInfo() {
-      alert("To top up credits, please contact admin or pay on the website.\n\n" +
-            "After payment, the admin calls /admin/manual-topup with your telegram ID.\n" +
-            "Then your credits are updated in the database.\n" +
-            "Check your balance again by reloading or pressing 'Pay 1 Credit to Play' button!");
+      alert("To top up credits, contact admin or pay on a website.\nThen the admin calls /admin/manual-topup with your Telegram ID.\nAfter that, re-check your credits here!");
     }
 
-    // 4) Countdown (for any reason, like next hour reset)
+    // 4) Countdown to next hour
     function updateCountdown() {
       const now = Date.now();
       const nextHour = now - (now % 3600000) + 3600000;
-      const diffMs = nextHour - now;
-      const m = Math.floor(diffMs / 60000);
-      const s = Math.floor((diffMs % 60000) / 1000);
+      const diff = nextHour - now;
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
       document.getElementById('countdown').innerText =
         `Next rewards in: ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     }
@@ -188,7 +231,7 @@
         const resp = await fetch(`${backendUrl}/current-leaderboard`);
         const data = await resp.json();
         if (!data.success) {
-          document.getElementById("leaderboard").innerHTML = "Error loading leaderboard.";
+          document.getElementById("leaderboard").innerText = "Error loading leaderboard.";
           return;
         }
         let html = "<h3>Current Hour Leaderboard</h3>";
@@ -206,102 +249,115 @@
       }
     }
 
-    // 6) SNAKE GAME
+    // 6) SNAKE GAME LOGIC
     let gameInterval;
+    let canvas, ctx;
+    let snake, food, dx, dy, score;
+
     function startGame() {
-      const canvas = document.getElementById("game-canvas");
-      const ctx = canvas.getContext("2d");
+      // Hide 'game-over' overlay if it was open
+      document.getElementById("game-over").style.display = "none";
 
-      let snake = [{ x: 10, y: 10 }];
-      let food = { x: 15, y: 15 };
-      let dx = 1, dy = 0;
-      let score = 0;
+      // Prepare the snake
+      snake = [{ x: 10, y: 10 }];
+      food = { x: 15, y: 15 };
+      dx = 1; dy = 0;
+      score = 0;
 
-      function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Draw snake
-        snake.forEach(segment => {
-          ctx.fillStyle = "lime";
-          ctx.fillRect(segment.x * 20, segment.y * 20, 20, 20);
-        });
-        // Draw food
-        ctx.fillStyle = "red";
-        ctx.fillRect(food.x * 20, food.y * 20, 20, 20);
-      }
+      canvas = document.getElementById("game-canvas");
+      ctx = canvas.getContext("2d");
 
-      function update() {
-        const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-        if (head.x === food.x && head.y === food.y) {
-          score++;
-          food = {
-            x: Math.floor(Math.random() * 20),
-            y: Math.floor(Math.random() * 20)
-          };
-        } else {
-          snake.pop();
-        }
-        snake.unshift(head);
-
-        // collision
-        if (
-          head.x < 0 || head.y < 0 ||
-          head.x >= 20 || head.y >= 20 ||
-          snake.slice(1).some(seg => seg.x === head.x && seg.y === head.y)
-        ) {
-          endGame(score);
-        }
-      }
-
-      function endGame(finalScore) {
-        clearInterval(gameInterval);
-        document.getElementById("final-score").innerText = finalScore;
-        document.getElementById("game-over").style.display = "block";
-
-        // Re-enable the button so they can pay 1 credit again next time
-        document.getElementById("pay-button").disabled = false;
-
-        // Optionally submit final score
-        if (telegramUserId && typeof finalScore === "number") {
-          fetch(`${backendUrl}/game/submit-score`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ telegram_id: telegramUserId, score: finalScore })
-          })
-            .then(r => r.json())
-            .then(d => {
-              console.log("Score submission response:", d);
-              fetchCurrentLeaderboard();
-            })
-            .catch(err => console.error("Error submit score:", err));
-        }
-      }
-
-      function restartGame() {
-        document.getElementById("game-over").style.display = "none";
-        clearInterval(gameInterval);
-        snake = [{ x: 10, y: 10 }];
-        food = { x: 15, y: 15 };
-        dx = 1; dy = 0;
-        score = 0;
-
-        gameInterval = setInterval(() => {
-          update();
-          draw();
-        }, 200);
-      }
-      window.restartGame = restartGame;
-
-      document.addEventListener("keydown", e => {
-        if (e.key === "ArrowUp"   && dy === 0) { dx = 0; dy = -1; }
-        if (e.key === "ArrowDown" && dy === 0) { dx = 0; dy = 1; }
-        if (e.key === "ArrowLeft" && dx === 0) { dx = -1; dy = 0; }
-        if (e.key === "ArrowRight"&& dx === 0) { dx = 1; dy = 0; }
-      });
-
+      // We run game loop 5 times/sec
       gameInterval = setInterval(() => {
         update();
         draw();
       }, 200);
+    }
+
+    function draw() {
+      // Because we stretched the canvas with CSS, let's get its "internal" scale:
+      // But for simplicity, let's just draw in 20x20 cells (the default).
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw snake
+      snake.forEach(segment => {
+        ctx.fillStyle = "lime";
+        ctx.fillRect(segment.x * 20, segment.y * 20, 20, 20);
+      });
+
+      // Draw food
+      ctx.fillStyle = "red";
+      ctx.fillRect(food.x * 20, food.y * 20, 20, 20);
+    }
+
+    function update() {
+      const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+      // Check if snake ate the food
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        food = {
+          x: Math.floor(Math.random() * 20),
+          y: Math.floor(Math.random() * 20)
+        };
+      } else {
+        // remove tail
+        snake.pop();
+      }
+      // add new head
+      snake.unshift(head);
+
+      // collision check (walls or self)
+      if (
+        head.x < 0 || head.y < 0 ||
+        head.x >= 20 || head.y >= 20 ||
+        snake.slice(1).some(s => s.x === head.x && s.y === head.y)
+      ) {
+        endGame(score);
+      }
+    }
+
+    function endGame(finalScore) {
+      clearInterval(gameInterval);
+      document.getElementById("final-score").innerText = finalScore;
+      document.getElementById("game-over").style.display = "block";
+
+      // Re-enable the pay button for next attempt
+      document.getElementById("pay-button").disabled = false;
+
+      // Submit score to server
+      if (telegramUserId && typeof finalScore === 'number') {
+        fetch(`${backendUrl}/game/submit-score`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telegram_id: telegramUserId, score: finalScore })
+        })
+        .then(r => r.json())
+        .then(resp => {
+          console.log("Score submission response:", resp);
+          // Refresh leaderboard after new score
+          fetchCurrentLeaderboard();
+        })
+        .catch(err => console.error("Error submitting score:", err));
+      }
+    }
+
+    /* We remove the "restartGame()" button that bypasses payment. 
+       If you want a "Play Again" button inside #game-over, 
+       it should call payAndStartGame(), not direct restartGame(). 
+    */
+
+    // On-screen arrow controls for mobile
+    function moveUp() {
+      if (dy === 0) { dx = 0; dy = -1; }
+    }
+    function moveDown() {
+      if (dy === 0) { dx = 0; dy = 1; }
+    }
+    function moveLeft() {
+      if (dx === 0) { dx = -1; dy = 0; }
+    }
+    function moveRight() {
+      if (dx === 0) { dx = 1; dy = 0; }
     }
   </script>
 </body>

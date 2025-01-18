@@ -1,4 +1,3 @@
-// bot.js
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const { Pool } = require("pg");
@@ -80,14 +79,14 @@ bot.on("callback_query", async (query) => {
 
     case "leaderboard": {
       try {
-        // Example scoreboard from 'scores' table for the current hour
-        const hourStart = Math.floor(Date.now() / (1000 * 60 * 60));
+        // We'll show top scoreboard for current hour
+        const hourStart = Math.floor(Date.now() / 3600000);
         const result = await pool.query(
           `SELECT u.username, s.score
            FROM scores s
            JOIN users u ON s.user_id = u.id
-           WHERE hour_start = $1
-           ORDER BY score DESC
+           WHERE s.hour_start = $1
+           ORDER BY s.score DESC
            LIMIT 10`,
           [hourStart]
         );

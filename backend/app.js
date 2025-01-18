@@ -25,7 +25,11 @@ app.post(`/bot${TELEGRAM_TOKEN}`, (req, res) => {
   res.sendStatus(200);
 });
 
-// 3) Local "stars" or "credits" endpoints
+/* ---------------------------------------------------------------------------
+   STAR / CREDITS ROUTES
+--------------------------------------------------------------------------- */
+
+// Get user’s current star count
 app.post("/game/get-credits", async (req, res) => {
   try {
     const { telegram_id } = req.body;
@@ -34,23 +38,23 @@ app.post("/game/get-credits", async (req, res) => {
       [telegram_id]
     );
     const stars = result.rows[0]?.stars || 0;
-    res.json({ success: true, stars });
+    return res.json({ success: true, credits: stars });
   } catch (err) {
     console.error("Error fetching credits:", err);
-    res.status(500).json({ success: false, message: "Error fetching credits." });
+    return res.status(500).json({ success: false, message: "Error fetching credits." });
   }
 });
 
+// Deduct 1 star for a game attempt
 app.post("/game/deduct-credit", async (req, res) => {
   try {
     const { telegram_id } = req.body;
-    let result = await pool.query(
+    const userRes = await pool.query(
       "SELECT stars FROM users WHERE telegram_id = $1",
       [telegram_id]
     );
-
-    if (result.rowCount === 0) {
-      // user doesn't exist? create with 0 stars
+    if (userRes.rowCount === 0) {
+      // user doesn't exist? create them with 0
       await pool.query(
         "INSERT INTO users (telegram_id, stars) VALUES ($1, 0)",
         [telegram_id]
@@ -61,7 +65,7 @@ app.post("/game/deduct-credit", async (req, res) => {
       });
     }
 
-    const currentStars = result.rows[0].stars;
+    const currentStars = userRes.rows[0].stars;
     if (currentStars > 0) {
       await pool.query(
         "UPDATE users SET stars = stars - 1 WHERE telegram_id = $1",
@@ -79,19 +83,20 @@ app.post("/game/deduct-credit", async (req, res) => {
     }
   } catch (err) {
     console.error("Error deducting star:", err);
-    res.status(500).json({ success: false, message: "Error deducting star." });
+    return res.status(500).json({ success: false, message: "Error deducting star." });
   }
 });
 
+// Manually top up (admin usage)
 app.post("/admin/manual-topup", async (req, res) => {
   try {
     const { telegram_id, addStars } = req.body;
     // Ensure user row
-    let result = await pool.query(
+    const userCheck = await pool.query(
       "SELECT id FROM users WHERE telegram_id = $1",
       [telegram_id]
     );
-    if (result.rowCount === 0) {
+    if (userCheck.rowCount === 0) {
       await pool.query(
         "INSERT INTO users (telegram_id, stars) VALUES ($1, 0)",
         [telegram_id]
@@ -105,26 +110,68 @@ app.post("/admin/manual-topup", async (req, res) => {
     return res.json({ success: true, message: "User credited successfully." });
   } catch (err) {
     console.error("Error topping up stars:", err);
-    res.status(500).json({ success: false, message: "Error topping up." });
+    return res.status(500).json({ success: false, message: "Error topping up." });
   }
 });
 
-// 4) (Optional) Scoreboard logic
+/* ---------------------------------------------------------------------------
+   SCORES & LEADERBOARD
+--------------------------------------------------------------------------- */
+
+// Submit score after the user finishes a game
+// We'll store it in 'scores' table with hour_start, etc. (example logic)
 app.post("/game/submit-score", async (req, res) => {
   try {
     const { telegram_id, score } = req.body;
-    console.log(`User ${telegram_id} finished with score: ${score}`);
-    res.json({ success: true, message: "Score recorded" });
+    if (!telegram_id || typeof score !== "number") {
+      return res.status(400).json({ success: false, message: "Invalid data." });
+    }
+
+    // 1) get user_id
+    const userCheck = await pool.query(
+      "SELECT id FROM users WHERE telegram_id = $1",
+      [telegram_id]
+    );
+    if (userCheck.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+    const userId = userCheck.rows[0].id;
+
+    // 2) compute hour_start
+    const hourStart = Math.floor(Date.now() / 3600000);
+
+    // 3) Insert or update
+    await pool.query(
+      `INSERT INTO scores (user_id, score, hour_start)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, hour_start)
+       DO UPDATE SET score = GREATEST(scores.score, EXCLUDED.score)`,
+      [userId, score, hourStart]
+    );
+
+    return res.json({ success: true, message: "Score recorded" });
   } catch (err) {
     console.error("Error saving score:", err);
-    res.status(500).json({ success: false, message: "Error saving score" });
+    return res.status(500).json({ success: false, message: "Error saving score" });
   }
 });
 
+// Return the top 10 players for the *current hour*
 app.get("/current-leaderboard", async (req, res) => {
   try {
-    // Just a placeholder
-    res.json({ success: true, leaderboard: [] });
+    const hourStart = Math.floor(Date.now() / 3600000);
+    // Query top scores for this hour
+    const result = await pool.query(
+      `SELECT u.username, s.score
+       FROM scores s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.hour_start = $1
+       ORDER BY s.score DESC
+       LIMIT 10`,
+      [hourStart]
+    );
+
+    res.json({ success: true, leaderboard: result.rows });
   } catch (err) {
     console.error("Error fetching leaderboard:", err);
     res.status(500).json({ success: false, message: "Error fetching leaderboard." });
