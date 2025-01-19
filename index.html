@@ -2,67 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- Make it responsive on mobile -->
+  <title>Dragon Snake – 60s Challenge</title>
+  <!-- Make it friendly for mobile devices -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HourSnake - Swipe + Arrow Keys</title>
+  <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
+    /* Body and layout */
     body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       background: #1a1a1a;
       color: #fff;
       font-family: Arial, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
-
-    h1 {
-      margin: 10px 0;
-      text-align: center;
-    }
-
-    #credits, #leaderboard, #countdown {
-      margin: 10px 0;
-      text-align: center;
-    }
-
+    h1 { text-align: center; margin: 10px 0; }
     button {
       background: #4CAF50;
       border: none;
       padding: 10px 20px;
-      color: white;
+      color: #fff;
       border-radius: 5px;
       cursor: pointer;
-      margin: 5px;
+      margin: 6px;
+      font-size: 16px;
     }
-    button:hover {
-      background: #45a049;
+    button:hover { background: #45a049; }
+    button:disabled { background: #666; cursor: not-allowed; }
+
+    /* Info and scoreboard sections */
+    #info-bar {
+      text-align: center;
+      margin-bottom: 10px;
     }
-    button:disabled {
-      background: #666;
-      cursor: not-allowed;
+    #credits, #countdown { margin: 6px 0; }
+
+    #leaderboard {
+      margin: 10px 0;
+      text-align: center;
     }
 
-    /* Responsive container for the canvas */
+    /* Game container and canvas */
     #game-container {
       position: relative;
-      width: 90vw; /* 90% of screen width on mobile */
-      max-width: 500px; /* limit on desktop */
+      width: 90vw;
+      max-width: 500px;
       height: 90vw;
       max-height: 500px;
-      margin: 20px auto;
       border: 2px solid #4CAF50;
       background: #000;
+      margin: 10px 0;
     }
-    /* The canvas inside it is normal 400x400, but scaled by CSS to fill parent */
     #game-canvas {
       width: 100%;
       height: 100%;
       display: block;
     }
 
+    /* Game Over overlay */
     #game-over {
       display: none;
       position: absolute;
@@ -75,74 +75,118 @@
       text-align: center;
       width: 80%;
     }
+    #game-over h2 { margin-bottom: 10px; }
+
+    /* For the floating text that appears when you eat the food */
+    .moon-eaten {
+      position: absolute;
+      font-size: 24px;
+      color: #f1c40f;
+      pointer-events: none;
+      animation: floatUp 1s ease-out forwards;
+      opacity: 0;
+      font-weight: bold;
+      z-index: 100;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    @keyframes floatUp {
+      0% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: translateY(-25px) scale(1.2);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-50px) scale(1);
+        opacity: 0;
+      }
+    }
+
+    /* Countdown styling */
+    #countdown { font-size: 18px; }
+
+    .critical {
+      color: #ff4040 !important;
+      font-weight: bold;
+      animation: pulse 0.4s infinite;
+    }
+    @keyframes pulse {
+      0%   { transform: scale(1);   }
+      50%  { transform: scale(1.3); }
+      100% { transform: scale(1);   }
+    }
   </style>
 </head>
+
 <body>
-  <h1>Snake Game (Swipe + Arrows)</h1>
+  <h1>Dragon Snake – 60s Challenge</h1>
+  <div id="info-bar">
+    <!-- Credits display -->
+    <div id="credits">Credits: (Loading...)</div>
+    <!-- Pay 1 star to play -->
+    <button id="pay-button" onclick="payAndStartGame()">Pay 1 Star to Play</button>
+    <!-- Show Leaderboard -->
+    <button onclick="fetchLeaderboard()">View Leaderboard</button>
+    <!-- Top-up instructions -->
+    <button onclick="topUpInfo()">Top Up Credits</button>
 
-  <!-- Show user's current credits -->
-  <div id="credits">Credits: Loading...</div>
+    <!-- 60-second countdown -->
+    <div id="countdown">Time Left: 60s</div>
+  </div>
 
-  <!-- Button to pay 1 star per attempt -->
-  <button id="pay-button" onclick="payAndStartGame()">Pay 1 Credit to Play</button>
-
-  <!-- Leaderboard button: fetch from the server anytime -->
-  <button id="leaderboard-button" onclick="fetchCurrentLeaderboard()">View Leaderboard</button>
-
-  <!-- Quick top-up instructions -->
-  <button id="topup-button" onclick="topUpInfo()">Top Up Credits</button>
-
-  <!-- Countdown to next hour (if you do hourly rewards) -->
-  <div id="countdown">Next rewards in: Loading...</div>
-
-  <!-- Current hour’s top 10 scoreboard -->
   <div id="leaderboard">Leaderboard: Loading...</div>
 
-  <!-- Snake Game Container -->
+  <!-- The game area -->
   <div id="game-container">
     <canvas id="game-canvas" width="400" height="400"></canvas>
-
     <div id="game-over">
       <h2>Game Over!</h2>
-      <p>Your score: <span id="final-score">0</span></p>
-      <p>Press "Pay 1 Credit to Play" for a new run.</p>
+      <p id="game-over-message"></p>
+      <p>Score: <span id="final-score">0</span></p>
+      <button id="play-again-btn" onclick="payAndStartGame()">Play Again</button>
     </div>
   </div>
 
   <script>
     const backendUrl = "https://hoursnake.onrender.com"; 
-    let telegramUserId;
+    let telegramUserId = null;
 
-    // We store game variables outside
-    let canvas, ctx, gameInterval;
-    let snake, food, dx, dy, score;
-
-    // For swipe detection
-    let touchStartX = null, touchStartY = null;
-    const SWIPE_THRESHOLD = 30; // minimum pixels to count as a swipe
+    // Basic approach:
+    //  1) On load -> init Telegram, get user ID
+    //  2) fetchCredits() -> show how many stars user has
+    //  3) "Pay 1 Star to Play" -> calls /game/deduct-credit, if success -> start the 60s game
+    //  4) In the game: user tries to get as many "moons" as possible. The snake is a "dragon" color gradient
+    //  5) When time is up or collision => game ends, we submit /game/submit-score
+    //  6) "Play Again" triggers payAndStartGame() again
 
     window.onload = function() {
-      // Attempt Telegram initialization
+      // Attempt Telegram init
       try {
         const tg = Telegram.WebApp;
         tg.requestFullscreen();
+
         telegramUserId = tg.initDataUnsafe?.user?.id;
         if (!telegramUserId) {
-          alert("No Telegram user ID. Are you inside Telegram WebApp?");
+          alert("Unable to fetch Telegram user ID. Are you inside Telegram?");
         }
       } catch (err) {
-        console.error("Error initializing Telegram:", err);
+        console.log("Telegram init error:", err);
       }
 
-      // Periodic updates
-      setInterval(updateCountdown, 1000);
-      setInterval(fetchCurrentLeaderboard, 15000); // update leaderboard every 15s
-
+      // Show credits and init scoreboard
       fetchCredits();
-      fetchCurrentLeaderboard();
+      fetchLeaderboard();
     };
 
-    /* ============ 1) GET CURRENT CREDITS ============ */
+    function topUpInfo() {
+      alert("To top up credits, please contact the admin or pay externally. The admin calls:\n" +
+            "/admin/manual-topup with your telegram_id.\n" +
+            "Then you can refresh your credits here!");
+    }
+
+    /* =========== 1) SHOW CREDITS ========== */
     async function fetchCredits() {
       if (!telegramUserId) return;
       try {
@@ -153,20 +197,20 @@
         });
         const data = await resp.json();
         if (data.success) {
-          document.getElementById("credits").innerText = `Credits: ${data.credits}`;
+          document.getElementById("credits").innerText = `Credits: ${data.stars}`;
         } else {
           document.getElementById("credits").innerText = "Credits: Error";
         }
       } catch (err) {
-        console.error("Error fetching credits:", err);
+        console.error("Error fetch credits:", err);
         document.getElementById("credits").innerText = "Credits: Error";
       }
     }
 
-    /* ============ 2) PAY 1 STAR, THEN START GAME ============ */
+    /* =========== 2) PAY 1 STAR, THEN START GAME ========== */
     async function payAndStartGame() {
       if (!telegramUserId) {
-        alert("No Telegram user ID. Are we inside Telegram?");
+        alert("No Telegram user ID found. Please open in Telegram.");
         return;
       }
       try {
@@ -177,27 +221,23 @@
         });
         const data = await resp.json();
         if (data.success) {
-          alert("1 credit deducted. Starting snake...");
+          alert("1 star deducted. Starting your run!");
           document.getElementById("pay-button").disabled = true;
+          // Refresh star count
           fetchCredits();
+          // Start the new game
           startGame();
         } else {
-          alert(data.message || "Not enough credits. Please top up first.");
+          alert(data.message || "Not enough stars. Please top up.");
         }
       } catch (error) {
-        console.error("Error deducting credit:", error);
-        alert("Could not deduct credit. Check console logs.");
+        console.error("Error paying 1 star:", error);
+        alert("Could not deduct star. Check console or server logs.");
       }
     }
 
-    function topUpInfo() {
-      alert("To top up credits, contact admin or a website.\n" +
-            "Then admin calls /admin/manual-topup with your ID.\n" +
-            "Refresh credits here after!");
-    }
-
-    /* ============ 3) LEADERBOARD ============ */
-    async function fetchCurrentLeaderboard() {
+    /* =========== 3) FETCH LEADERBOARD ========== */
+    async function fetchLeaderboard() {
       try {
         const resp = await fetch(`${backendUrl}/current-leaderboard`);
         const data = await resp.json();
@@ -207,196 +247,399 @@
         }
         let html = "<h3>Current Hour Leaderboard</h3>";
         if (data.leaderboard.length === 0) {
-          html += "<p>No scores yet this hour.</p>";
+          html += "<p>No scores yet.</p>";
         } else {
           data.leaderboard.forEach((entry, idx) => {
-            html += `<p>${idx+1}. ${entry.username || "Anonymous"} - ${entry.score}</p>`;
+            html += `<p>${idx+1}. ${entry.username || 'Anon'} - ${entry.score}</p>`;
           });
         }
         document.getElementById("leaderboard").innerHTML = html;
       } catch (err) {
-        console.error("Error fetching leaderboard:", err);
-        document.getElementById("leaderboard").innerText = "Leaderboard: Error";
+        console.error("Error fetching LB:", err);
+        document.getElementById("leaderboard").innerText = "Leaderboard Error.";
       }
     }
 
-    /* ============ 4) COUNTDOWN ============ */
-    function updateCountdown() {
-      const now = Date.now();
-      const nextHour = now - (now % 3600000) + 3600000;
-      const diff = nextHour - now;
-      const m = Math.floor(diff / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      document.getElementById("countdown").innerText =
-        `Next rewards in: ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    }
+    /* =========== 4) THE 60-SECOND DRAGON SNAKE GAME ========== */
 
-    /* ============ 5) SNAKE GAME LOGIC ============ */
+    let snakeGame = null;
+
     function startGame() {
-      // Hide game-over overlay if visible
+      // Hide any old overlay
       document.getElementById("game-over").style.display = "none";
+      document.getElementById("game-over-message").textContent = "";
+      document.getElementById("final-score").textContent = "0";
 
-      // Initialize snake data
-      snake = [{ x: 10, y: 10 }];
-      food = { x: 15, y: 15 };
-      dx = 1; dy = 0;
-      score = 0;
-
-      canvas = document.getElementById("game-canvas");
-      ctx = canvas.getContext("2d");
-
-      // Keydown for arrow keys
-      document.addEventListener("keydown", handleKeyDown);
-      // Touch events for swipes
-      canvas.addEventListener("touchstart", handleTouchStart, false);
-      canvas.addEventListener("touchend", handleTouchEnd, false);
-
-      // Game loop
-      gameInterval = setInterval(() => {
-        update();
-        draw();
-      }, 200);
+      // Create a new instance
+      snakeGame = new DragonGame();
+      snakeGame.init();
     }
 
-    function draw() {
-      // Clear
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // The snake / game classes, similar to your snippet:
 
-      // Draw snake
-      snake.forEach(segment => {
-        ctx.fillStyle = "lime";
-        ctx.fillRect(segment.x * 20, segment.y * 20, 20, 20);
-      });
+    class Snake {
+      constructor(gridSize) {
+        this.gridSize = gridSize;
+        this.reset();
 
-      // Draw food
-      ctx.fillStyle = "red";
-      ctx.fillRect(food.x * 20, food.y * 20, 20, 20);
-    }
+        // A color gradient for the dragon
+        this.dragonColors = [
+          '#ff0000', // Head (red)
+          '#ff4d00', // ...
+          '#ff7400',
+          '#ff9a00',
+          '#ffb700',
+          '#ffd300',
+          '#ffe600'
+        ];
+      }
 
-    function update() {
-      // Next head
-      const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-      // Check eat
-      if (head.x === food.x && head.y === food.y) {
-        score++;
-        food = {
-          x: Math.floor(Math.random() * 20),
-          y: Math.floor(Math.random() * 20)
+      reset() {
+        this.direction = 'right';
+        this.nextDirection = 'right';
+        const mid = Math.floor(this.gridSize / 2);
+        // Start snake with 3 segments in the middle
+        this.body = [
+          { x: 3, y: mid },
+          { x: 2, y: mid },
+          { x: 1, y: mid }
+        ];
+      }
+
+      changeDirection(newDir) {
+        const opposites = {
+          up: 'down',
+          down: 'up',
+          left: 'right',
+          right: 'left'
         };
-      } else {
-        snake.pop(); // remove tail
-      }
-      // Add new head
-      snake.unshift(head);
-
-      // Check collision (walls or self)
-      if (
-        head.x < 0 || head.y < 0 ||
-        head.x >= 20 || head.y >= 20 ||
-        snake.slice(1).some(s => s.x === head.x && s.y === head.y)
-      ) {
-        endGame(score);
-      }
-    }
-
-    function endGame(finalScore) {
-      clearInterval(gameInterval);
-
-      // Remove event listeners so we don't double up
-      document.removeEventListener("keydown", handleKeyDown);
-      canvas.removeEventListener("touchstart", handleTouchStart);
-      canvas.removeEventListener("touchend", handleTouchEnd);
-
-      // Show overlay
-      document.getElementById("final-score").innerText = finalScore;
-      document.getElementById("game-over").style.display = "block";
-
-      // Re-enable pay button
-      document.getElementById("pay-button").disabled = false;
-
-      // Submit final score
-      if (telegramUserId && typeof finalScore === "number") {
-        fetch(`${backendUrl}/game/submit-score`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ telegram_id: telegramUserId, score: finalScore })
-        })
-        .then(r => r.json())
-        .then(resp => {
-          console.log("Score submission response:", resp);
-          // Refresh leaderboard
-          fetchCurrentLeaderboard();
-        })
-        .catch(err => console.error("Error submitting score:", err));
-      }
-    }
-
-    // 6) ARROW KEY CONTROLS (no click needed)
-    function handleKeyDown(e) {
-      e.preventDefault(); // so arrow keys won't scroll on mobile
-      switch(e.key) {
-        case "ArrowUp":
-          if (dy === 0) { dx = 0; dy = -1; }
-          break;
-        case "ArrowDown":
-          if (dy === 0) { dx = 0; dy = 1; }
-          break;
-        case "ArrowLeft":
-          if (dx === 0) { dx = -1; dy = 0; }
-          break;
-        case "ArrowRight":
-          if (dx === 0) { dx = 1; dy = 0; }
-          break;
-        default:
-          break;
-      }
-    }
-
-    // 7) SWIPE CONTROLS (mobile)
-    function handleTouchStart(e) {
-      if (e.touches.length === 1) {
-        // single touch
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-      }
-    }
-
-    function handleTouchEnd(e) {
-      if (!touchStartX || !touchStartY) return;
-      const xUp = e.changedTouches[0].clientX;
-      const yUp = e.changedTouches[0].clientY;
-
-      const dxSwipe = xUp - touchStartX;
-      const dySwipe = yUp - touchStartY;
-
-      // reset
-      touchStartX = null;
-      touchStartY = null;
-
-      if (Math.abs(dxSwipe) < SWIPE_THRESHOLD && Math.abs(dySwipe) < SWIPE_THRESHOLD) {
-        // swipe not big enough
-        return;
-      }
-
-      // horizontal vs vertical
-      if (Math.abs(dxSwipe) > Math.abs(dySwipe)) {
-        // horizontal
-        if (dxSwipe > 0) {
-          // right
-          if (dx === 0) { dx = 1; dy = 0; }
-        } else {
-          // left
-          if (dx === 0) { dx = -1; dy = 0; }
+        if (opposites[newDir] !== this.direction) {
+          this.nextDirection = newDir;
         }
-      } else {
-        // vertical
-        if (dySwipe > 0) {
-          // down
-          if (dy === 0) { dx = 0; dy = 1; }
-        } else {
-          // up
-          if (dy === 0) { dx = 0; dy = -1; }
+      }
+
+      move(food) {
+        this.direction = this.nextDirection;
+        const head = { ...this.body[0] };
+        if (this.direction === 'up') head.y--;
+        if (this.direction === 'down') head.y++;
+        if (this.direction === 'left') head.x--;
+        if (this.direction === 'right') head.x++;
+
+        // Wrap edges
+        if (head.x < 0) head.x = this.gridSize - 1;
+        if (head.x >= this.gridSize) head.x = 0;
+        if (head.y < 0) head.y = this.gridSize - 1;
+        if (head.y >= this.gridSize) head.y = 0;
+
+        const ate = (head.x === food.x && head.y === food.y);
+        if (!ate) {
+          // remove tail
+          this.body.pop();
         }
+        this.body.unshift(head);
+        return ate;
+      }
+
+      checkCollision() {
+        const [ head, ...rest ] = this.body;
+        return rest.some(segment => segment.x === head.x && segment.y === head.y);
+      }
+    }
+
+    class DragonGame {
+      constructor() {
+        this.canvas = document.getElementById("game-canvas");
+        this.ctx = this.canvas.getContext("2d");
+        this.gridSize = 20; // bigger grid
+        this.snake = new Snake(this.gridSize);
+        this.score = 0;
+        this.gameOver = false;
+
+        this.gameTime = 60000; // 60s
+        this.timeLeft = this.gameTime;
+        this.gameStartTime = null;
+
+        // Speed control
+        this.baseSpeed = 8;   // moves/sec
+        this.currentSpeed = this.baseSpeed;
+
+        this.lastRenderTime = 0;
+
+        this.food = this.generateFood();
+        // For the requestAnimationFrame loop
+        this.gameLoop = this.gameLoop.bind(this);
+
+        // Immediate arrow key usage
+        this.handleKeyDown = this.handleKeyDown.bind(this);
+        document.addEventListener("keydown", this.handleKeyDown);
+
+        // Swipe
+        this.touchStartX = null;
+        this.touchStartY = null;
+        this.canvas.addEventListener("touchstart", this.handleTouchStart.bind(this), {passive:false});
+        this.canvas.addEventListener("touchend", this.handleTouchEnd.bind(this), {passive:false});
+      }
+
+      init() {
+        this.snake.reset();
+        this.score = 0;
+        this.gameOver = false;
+        this.timeLeft = this.gameTime;
+        this.gameStartTime = null;
+        this.currentSpeed = this.baseSpeed;
+        // Start the loop
+        requestAnimationFrame(this.gameLoop);
+      }
+
+      generateFood() {
+        let newFood;
+        let attempts = 0;
+        const maxAttempts = 100;
+        do {
+          newFood = {
+            x: Math.floor(Math.random() * this.gridSize),
+            y: Math.floor(Math.random() * this.gridSize)
+          };
+          attempts++;
+          const overlap = this.snake.body.some(s => s.x === newFood.x && s.y === newFood.y);
+          if (!overlap) break;
+        } while (attempts < maxAttempts);
+        return newFood || { x: 0, y: 0 };
+      }
+
+      gameLoop(currentTime) {
+        if (this.gameOver) return;
+        if (!this.gameStartTime) this.gameStartTime = Date.now();
+
+        // Update time
+        const elapsed = Date.now() - this.gameStartTime;
+        this.timeLeft = Math.max(0, this.gameTime - elapsed);
+        const secLeft = Math.ceil(this.timeLeft / 1000);
+        const cdown = document.getElementById("countdown");
+        cdown.textContent = `Time Left: ${secLeft}s`;
+
+        // Add "critical" style if < 10s left
+        if (secLeft <= 10) {
+          cdown.classList.add("critical");
+        } else {
+          cdown.classList.remove("critical");
+        }
+
+        // If time is up => game over
+        if (this.timeLeft <= 0) {
+          this.endGame(true, "Time is up!");
+          return;
+        }
+
+        // Speed scaling if you want: e.g. 8 base speed => up to 16 near the end
+        const ratio = 1 - (this.timeLeft / this.gameTime);
+        this.currentSpeed = this.baseSpeed + ratio * 10; // up to ~18 moves/sec
+
+        // Limit the render
+        const sinceLastRender = (currentTime - this.lastRenderTime) / 1000;
+        if (sinceLastRender < 1 / this.currentSpeed) {
+          requestAnimationFrame(this.gameLoop);
+          return;
+        }
+        this.lastRenderTime = currentTime;
+
+        // Move the snake
+        const ate = this.snake.move(this.food);
+        if (ate) {
+          this.score++;
+          this.food = this.generateFood();
+          // Animate the +1 text
+          this.createFloatingText();
+        }
+
+        // Check collision
+        if (this.snake.checkCollision()) {
+          this.endGame(false, "You collided with yourself!");
+          return;
+        }
+
+        // Draw
+        this.draw();
+        requestAnimationFrame(this.gameLoop);
+      }
+
+      endGame(byTime, msg) {
+        this.gameOver = true;
+        // Remove event listeners
+        document.removeEventListener("keydown", this.handleKeyDown);
+        this.canvas.removeEventListener("touchstart", this.touchStartX);
+        this.canvas.removeEventListener("touchend", this.touchEnd);
+
+        // Show overlay
+        document.getElementById("game-over").style.display = "block";
+        document.getElementById("final-score").textContent = this.score;
+        document.getElementById("game-over-message").textContent = msg;
+
+        // Submit final score to your backend
+        if (telegramUserId) {
+          fetch(`${backendUrl}/game/submit-score`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ telegram_id: telegramUserId, score: this.score })
+          })
+          .then(r => r.json())
+          .then(d => {
+            console.log("Score submission response:", d);
+            // Refresh leaderboard if needed
+            fetchLeaderboard();
+          })
+          .catch(err => console.error("Error submitting score:", err));
+        }
+
+        // Re-enable the pay button
+        document.getElementById("pay-button").disabled = false;
+      }
+
+      draw() {
+        this.ctx.fillStyle = "#333"; // background
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw snake
+        const snakeLength = this.snake.body.length;
+        this.snake.body.forEach((segment, index) => {
+          // color index
+          let colorIndex = Math.floor(
+            index / (snakeLength / this.snake.dragonColors.length)
+          );
+          if (colorIndex >= this.snake.dragonColors.length) {
+            colorIndex = this.snake.dragonColors.length - 1;
+          }
+          const color = this.snake.dragonColors[colorIndex];
+          const isHead = (index === 0);
+          this.drawCell(segment.x, segment.y, color, isHead);
+        });
+
+        // Draw food
+        // let's do a bright moon color: gold
+        const foodSize = this.canvas.width / this.gridSize;
+        this.ctx.fillStyle = "#ffdd00";
+        this.ctx.beginPath();
+        this.ctx.arc(
+          (this.food.x + 0.5) * foodSize,
+          (this.food.y + 0.5) * foodSize,
+          (foodSize * 0.4),
+          0, 2 * Math.PI
+        );
+        this.ctx.fill();
+      }
+
+      drawCell(gx, gy, color, isHead) {
+        const cellSize = this.canvas.width / this.gridSize;
+        const x = gx * cellSize;
+        const y = gy * cellSize;
+
+        // draw circle for a “dragon scale” effect
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        const r = cellSize / 2;
+        this.ctx.arc(x + r, y + r, r - 1, 0, 2 * Math.PI);
+        this.ctx.fill();
+
+        // if head, add eyes
+        if (isHead) {
+          // White eyes
+          this.ctx.fillStyle = "white";
+          const eyeR = r * 0.25;
+          // left eye
+          this.ctx.beginPath();
+          this.ctx.arc(x + r*0.5, y + r*0.6, eyeR, 0, 2*Math.PI);
+          this.ctx.fill();
+          // right eye
+          this.ctx.beginPath();
+          this.ctx.arc(x + r*1.5, y + r*0.6, eyeR, 0, 2*Math.PI);
+          this.ctx.fill();
+          // black pupils
+          this.ctx.fillStyle = "black";
+          const pupilR = eyeR*0.5;
+          // left pupil
+          this.ctx.beginPath();
+          this.ctx.arc(x + r*0.5, y + r*0.6, pupilR, 0, 2*Math.PI);
+          this.ctx.fill();
+          // right pupil
+          this.ctx.beginPath();
+          this.ctx.arc(x + r*1.5, y + r*0.6, pupilR, 0, 2*Math.PI);
+          this.ctx.fill();
+        }
+      }
+
+      handleKeyDown(e) {
+        e.preventDefault();
+        switch(e.key) {
+          case "ArrowUp":    this.snake.changeDirection("up");    break;
+          case "ArrowDown":  this.snake.changeDirection("down");  break;
+          case "ArrowLeft":  this.snake.changeDirection("left");  break;
+          case "ArrowRight": this.snake.changeDirection("right"); break;
+          default: break;
+        }
+      }
+
+      touchStartX = null; touchStartY = null;
+      handleTouchStart(e) {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+          this.touchStartX = e.touches[0].clientX;
+          this.touchStartY = e.touches[0].clientY;
+        }
+      }
+      handleTouchEnd(e) {
+        e.preventDefault();
+        if (this.touchStartX === null || this.touchStartY === null) return;
+
+        const xUp = e.changedTouches[0].clientX;
+        const yUp = e.changedTouches[0].clientY;
+        const dx = xUp - this.touchStartX;
+        const dy = yUp - this.touchStartY;
+
+        // reset
+        this.touchStartX = null;
+        this.touchStartY = null;
+
+        const threshold = 30;
+        if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) {
+          return;
+        }
+
+        if (Math.abs(dx) > Math.abs(dy)) {
+          // horizontal
+          if (dx > 0) {
+            this.snake.changeDirection("right");
+          } else {
+            this.snake.changeDirection("left");
+          }
+        } else {
+          // vertical
+          if (dy > 0) {
+            this.snake.changeDirection("down");
+          } else {
+            this.snake.changeDirection("up");
+          }
+        }
+      }
+
+      createFloatingText() {
+        const gameRect = this.canvas.getBoundingClientRect();
+        // pick a random x,y near the food for the effect
+        const fx = this.food.x * (this.canvas.width / this.gridSize);
+        const fy = this.food.y * (this.canvas.width / this.gridSize);
+
+        const div = document.createElement("div");
+        div.className = "moon-eaten";
+        div.textContent = "+1 🌕";
+        div.style.left = (gameRect.left + fx + 10) + "px";
+        div.style.top  = (gameRect.top  + fy - 10) + "px";
+        document.body.appendChild(div);
+
+        setTimeout(() => {
+          if (div && div.parentNode) {
+            div.parentNode.removeChild(div);
+          }
+        }, 1000);
       }
     }
   </script>
