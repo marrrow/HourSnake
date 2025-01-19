@@ -2,440 +2,125 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dragon on Ice – 60s Challenge</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Set viewport so the canvas fills the full window -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Cosmic Dragon Snake</title>
   <style>
-    /* Basic Reset */
-    * {
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box; 
-      user-select: none; 
-    }
+    /* Inline basic styles to avoid having a separate style.css file */
     html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden; /* Let the canvas fill the screen */
-      background: #d0f1ff; /* Soft "ice" color background */
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* Prevent scrolling */
+      background: #111;
       font-family: Arial, sans-serif;
+      touch-action: none;
     }
-
-    /* Container that holds everything in a full-screen layout */
     #game-container {
       position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
       width: 100%;
       height: 100%;
     }
-
-    /* The actual canvas that we draw the dragon game onto */
-    #game-canvas {
+    /* Overlay for fixed timer and score shield */
+    #overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      /* fill entire screen: */
-      width: 100%;
-      height: 100%;
-      background: #d0f1ff; /* fallback color if canvas is not drawn */
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      text-align: center;
+      pointer-events: none;
     }
-
-    /* The score in top-left corner */
-    #score-display {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      font-size: 20px;
-      color: #222;
-      background: rgba(255, 255, 255, 0.5);
-      padding: 8px 12px;
-      border-radius: 8px;
+    #timer {
+      font-size: 12vw;
+      color: rgba(255, 255, 255, 0.15);
+      font-weight: bold;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+      transition: transform 0.3s;
     }
-
-    /* Semi-transparent blinking timer in the center */
-    #timer-display {
+    /* When the time is low, add a pulse effect */
+    .timer-warning {
+      animation: pulse 0.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    #score-shield {
+      font-size: 3vw;
+      color: #ffffff;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 10px;
+      margin-top: 10px;
+      text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+    }
+    /* End-of-game menu styles */
+    #menu {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 48px;
-      font-weight: bold;
-      color: #ff2e2e;
-      text-shadow: 2px 2px 2px rgba(0,0,0,0.3);
-      background: rgba(255, 255, 255, 0.3);
-      padding: 20px 30px;
-      border-radius: 20px;
-      animation: blink 1s infinite alternate;
-    }
-    @keyframes blink {
-      from { opacity: 1; }
-      to { opacity: 0.5; }
-    }
-
-    /* Game Over overlay */
-    #game-over-screen {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 300px;
-      background: rgba(0,0,0,0.8);
-      color: #fff;
+      background: rgba(0, 0, 0, 0.9);
+      padding: 2rem;
+      border-radius: 10px;
+      color: white;
       text-align: center;
-      padding: 20px;
-      border-radius: 12px;
-      display: none; /* Hidden by default */
+      z-index: 3;
+      display: none;
     }
-    #game-over-screen h2 {
-      margin-bottom: 10px;
-      font-size: 28px;
-    }
-    #game-over-screen p {
-      margin-bottom: 15px;
-    }
-    .game-over-btn {
-      display: inline-block;
-      margin: 5px;
-      padding: 10px 15px;
-      font-size: 16px;
-      color: #fff;
-      background: #008cff;
-      border-radius: 6px;
-      text-decoration: none;
+    #menu h2 { margin-bottom: 1rem; }
+    #menu p { margin: 0.5rem 0; }
+    #menu button {
+      background: #4CAF50;
+      border: none;
+      padding: 10px 20px;
+      color: white;
+      font-size: 1rem;
+      border-radius: 5px;
       cursor: pointer;
+      margin: 0.5rem;
+      transition: background 0.3s;
     }
-    .game-over-btn:hover {
-      background: #0072cc;
+    #menu button:hover { background: #45a049; }
+    #leaderboard-menu {
+      margin: 1rem 0;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+    }
+    #scores-list {
+      list-style: inside;
+      margin: 0.5rem 0;
+      padding-left: 0;
     }
   </style>
 </head>
 <body>
   <div id="game-container">
-    <canvas id="game-canvas"></canvas>
-    <!-- Score in top-left corner -->
-    <div id="score-display">Score: 0</div>
-    <!-- Semi-transparent blinking timer in center -->
-    <div id="timer-display">60</div>
-    
-    <!-- Game Over Screen Overlay -->
-    <div id="game-over-screen">
+    <canvas id="gameCanvas"></canvas>
+    <div id="overlay">
+      <div id="timer">60</div>
+      <div id="score-shield">Score: 0</div>
+    </div>
+    <!-- End-of-game menu -->
+    <div id="menu">
       <h2>Game Over!</h2>
-      <p id="final-score-text">Final Score: 0</p>
-      <div>
-        <button class="game-over-btn" id="play-again-btn">Play Again (1 Star)</button>
-        <button class="game-over-btn" id="leaderboard-btn">Leaderboard</button>
-        <button class="game-over-btn" id="exit-btn">Exit</button>
+      <p>Your final score: <span id="final-score">0</span></p>
+      <div id="leaderboard-menu">
+        <h3>Top Scores</h3>
+        <ol id="scores-list"></ol>
       </div>
+      <button id="play-again">Play Again</button>
+      <button id="exit-menu">Exit to Menu</button>
     </div>
   </div>
-
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script>
-    /* 
-      =========== Basic Explanation ===========
-
-      - We'll have a 60-second timer, 
-      - The user controls a "dragon" that moves around collecting moons. 
-      - Each time they collect 5 moons, the moon changes color. 
-      - Once time is up or the dragon collides with itself, game ends. 
-      - We show "Game Over" overlay with 3 options:
-        1) Play Again (deduct star, start new round)
-        2) Leaderboard
-        3) Exit
-    */
-
-    const BACKEND_URL = "https://hoursnake.onrender.com"; // e.g. "https://hoursnake.onrender.com"
-    let telegramUserId = null; // We'll fetch from Telegram init data
-    
-    // Game constants
-    const GRID_SIZE = 20;       // how many cells wide/tall
-    const INITIAL_TIME = 60;    // 60 seconds
-    const SPEED = 10;           // moves per second
-    let cellSize = 0;           // computed from canvas size
-    
-    // Variables for the dragon game
-    let canvas, ctx;
-    let snakeBody = [];
-    let snakeDir = { x: 1, y: 0 };  // moving right
-    let nextDir = { x: 1, y: 0 };
-    let food = { x: 0, y: 0 }; // the 'moon'
-    let score = 0;
-    let timeLeft = INITIAL_TIME;
-    let gameOver = false;
-    let lastRender = 0; // track time for animation
-    let collectedMoons = 0; // how many total times we've eaten the 'moon'
-    
-    const colorStages = [
-      "#ffffff", // stage 0: white
-      "#ffdb75", // stage 1: yellowish
-      "#ffa300", // stage 2: orange
-      "#ff4a00", // stage 3: red
-      "#c10087", // stage 4: bordeaux
-      "#7e00c1", // stage 5: violet
-      "#0033c1", // stage 6: deep blue
-      "#000000"  // stage 7: black
-    ];
-    
-    // We'll pick a color stage based on how many sets of 5 we've collected
-    function getMoonColor() {
-      const stageIndex = Math.floor(collectedMoons / 5);
-      if (stageIndex >= colorStages.length) return colorStages[colorStages.length - 1];
-      return colorStages[stageIndex];
-    }
-
-    // init Telegram
-    function initTelegram() {
-      try {
-        const tg = Telegram.WebApp;
-        tg.requestFullscreen(); // request full screen
-        telegramUserId = tg.initDataUnsafe?.user?.id;
-        if (!telegramUserId) {
-          alert("Telegram user ID not found. Please open in Telegram WebApp.");
-        }
-      } catch (err) {
-        console.error("Failed to init Telegram WebApp:", err);
-      }
-    }
-
-    // Set up canvas
-    function initCanvas() {
-      canvas = document.getElementById("game-canvas");
-      ctx = canvas.getContext("2d");
-      resizeCanvas();
-      window.addEventListener("resize", resizeCanvas);
-    }
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      cellSize = Math.floor(Math.min(canvas.width, canvas.height) / GRID_SIZE);
-    }
-
-    // Initialize game variables
-    function resetGame() {
-      score = 0;
-      timeLeft = INITIAL_TIME;
-      gameOver = false;
-      collectedMoons = 0;
-      // initial snake: 3 segments
-      const centerX = Math.floor(GRID_SIZE / 2);
-      const centerY = Math.floor(GRID_SIZE / 2);
-      snakeBody = [
-        { x: centerX,     y: centerY },
-        { x: centerX - 1, y: centerY },
-        { x: centerX - 2, y: centerY }
-      ];
-      snakeDir = { x: 1, y: 0 };
-      nextDir = { x: 1, y: 0 };
-      placeFood();
-    }
-
-    // place random 'moon'
-    function placeFood() {
-      let valid = false;
-      while(!valid) {
-        const fx = Math.floor(Math.random() * GRID_SIZE);
-        const fy = Math.floor(Math.random() * GRID_SIZE);
-        if (!snakeBody.some(seg => seg.x === fx && seg.y === fy)) {
-          food.x = fx;
-          food.y = fy;
-          valid = true;
-        }
-      }
-    }
-
-    // handle arrow keys for direction
-    document.addEventListener('keydown', e => {
-      if (e.key === 'ArrowUp')    setDir(0, -1);
-      if (e.key === 'ArrowDown')  setDir(0, 1);
-      if (e.key === 'ArrowLeft')  setDir(-1, 0);
-      if (e.key === 'ArrowRight') setDir(1, 0);
-    });
-
-    function setDir(dx, dy) {
-      // prevent reversing directly
-      if (dx === -snakeDir.x && dy === -snakeDir.y) return;
-      nextDir = { x: dx, y: dy };
-    }
-
-    // update snake logic
-    function updateSnake() {
-      snakeDir = nextDir;
-      const head = { 
-        x: snakeBody[0].x + snakeDir.x, 
-        y: snakeBody[0].y + snakeDir.y 
-      };
-      // wrap around edges
-      if (head.x < 0) head.x = GRID_SIZE - 1;
-      if (head.x >= GRID_SIZE) head.x = 0;
-      if (head.y < 0) head.y = GRID_SIZE - 1;
-      if (head.y >= GRID_SIZE) head.y = 0;
-
-      // check if eaten food
-      if (head.x === food.x && head.y === food.y) {
-        score++;
-        collectedMoons++;
-        placeFood();
-      } else {
-        snakeBody.pop(); // remove tail
-      }
-
-      snakeBody.unshift(head); // add new head
-    }
-
-    // check collision with own body
-    function checkCollision() {
-      const [head, ...body] = snakeBody;
-      return body.some(seg => seg.x === head.x && seg.y === head.y);
-    }
-
-    // main draw
-    function drawGame() {
-      // clear
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // draw "ice" (we can fill with color or background image)
-      ctx.fillStyle = "#d0f1ff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // draw food (the "moon")
-      const moonColor = getMoonColor();
-      drawCell(food.x, food.y, moonColor, false);
-
-      // draw snake
-      snakeBody.forEach((seg, idx) => {
-        // color the head differently
-        let color = idx === 0 ? "#ff0000" : "#00c600";
-        // or you can do fancier gradient if you like
-        drawCell(seg.x, seg.y, color, idx === 0);
-      });
-    }
-
-    function drawCell(gridX, gridY, color, isHead=false) {
-      const px = gridX * cellSize;
-      const py = gridY * cellSize;
-      ctx.fillStyle = color;
-      ctx.fillRect(px, py, cellSize, cellSize);
-      if (isHead) {
-        // optionally draw eyes
-      }
-    }
-
-    // game loop with requestAnimationFrame
-    function gameLoop(timestamp) {
-      if (gameOver) return; // stop loop
-
-      const secondsSinceLastRender = (timestamp - lastRender) / 1000;
-      if (secondsSinceLastRender < 1 / SPEED) {
-        requestAnimationFrame(gameLoop);
-        return;
-      }
-      lastRender = timestamp;
-
-      // update timer
-      timeLeft -= (1 / SPEED);
-      if (timeLeft <= 0) {
-        endGame("Time's up!");
-        return;
-      }
-      
-      document.getElementById("timer-display").textContent = Math.ceil(timeLeft);
-
-      // update & draw
-      updateSnake();
-      if (checkCollision()) {
-        endGame("You crashed into yourself!");
-        return;
-      }
-      drawGame();
-      
-      // update score display
-      document.getElementById("score-display").textContent = `Score: ${score}`;
-
-      requestAnimationFrame(gameLoop);
-    }
-
-    // end game
-    function endGame(reason) {
-      gameOver = true;
-      document.getElementById("game-over-screen").style.display = "block";
-      document.getElementById("final-score-text").textContent = `Final Score: ${score}`;
-
-      // Optionally call /game/submit-score if you want to store in DB
-      if (telegramUserId && typeof score === "number") {
-        fetch(`${BACKEND_URL}/game/submit-score`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            telegram_id: telegramUserId,
-            score: score
-          })
-        })
-        .then(r => r.json())
-        .then(d => {
-          console.log("Score submission:", d);
-        })
-        .catch(err => {
-          console.error("Submit score error:", err);
-        });
-      }
-    }
-
-    // handle "Play Again" -> deduct star, then reset
-    async function playAgain() {
-      if (!telegramUserId) {
-        alert("No Telegram ID found – cannot deduct star!");
-        return;
-      }
-      // 1) Call /game/deduct-credit
-      const resp = await fetch(`${BACKEND_URL}/game/deduct-credit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ telegram_id: telegramUserId })
-      });
-      const data = await resp.json();
-      if (!data.success) {
-        alert(data.message || "Not enough stars or error");
-        return;
-      }
-      // 2) If success, hide gameOver, reset game, start new loop
-      document.getElementById("game-over-screen").style.display = "none";
-      resetGame();
-      lastRender = 0;
-      requestAnimationFrame(gameLoop);
-    }
-
-    function showLeaderboard() {
-      // e.g. call your /current-leaderboard or open a mini app link
-      window.open(`${BACKEND_URL}/current-leaderboard`, "_blank");
-      // or do something else
-    }
-
-    function exitGame() {
-      // Possibly close the Telegram WebApp
-      if (window.Telegram && Telegram.WebApp) {
-        Telegram.WebApp.close();
-      } else {
-        alert("Exiting game (web) – no Telegram WebApp environment found.");
-      }
-    }
-
-    // attach event listeners to "Play Again", "Leaderboard", "Exit"
-    document.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("play-again-btn").addEventListener("click", playAgain);
-      document.getElementById("leaderboard-btn").addEventListener("click", showLeaderboard);
-      document.getElementById("exit-btn").addEventListener("click", exitGame);
-    });
-
-    // Start everything
-    window.onload = function() {
-      initTelegram();    // fetch user id, request fullscreen
-      initCanvas();      
-      // You can do a "deduct-credit" immediately if you like, or let them press a "Start" button:
-      // For demonstration, let's just do an immediate confirm:
-      if (!telegramUserId) {
-        alert("No user found. Press OK to continue anyway...");
-      }
-      // Potentially do a "deduct-credit" up front. Or let user press a Start button:
-      // We'll just do 'playAgain()' to simulate the first run:
-      playAgain();
-    };
-  </script>
+  <!-- Load the game module (this version uses ES modules) -->
+  <script type="module" src="./backend/routes/game.js"></script>
 </body>
 </html>
